@@ -244,7 +244,7 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			h.responseFixedPage(w, "rbreakr", nil)
 		}
-		h.RemoveHandler(st.sessionID)
+		//h.removeSessionHandler(st.sessionID)
 		return
 	}
 
@@ -346,7 +346,7 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *sessionHandler) RemoveHandler(sessionID string) {
+func (h *sessionHandler) removeSessionHandler(sessionID string) {
 	h.sessionListMutex.Lock()
 	defer h.sessionListMutex.Unlock()
 	ses := h.sessionList[sessionID]
@@ -411,7 +411,7 @@ func (h *sessionHandler) sendOp(op *otasker.OracleOperation) {
 }
 
 func (ses *session) Listen(h *sessionHandler, sessionID string, idleTimeout time.Duration) {
-	defer h.RemoveHandler(sessionID)
+	defer h.removeSessionHandler(sessionID)
 	for {
 		select {
 		case transport := <-ses.srcChannel:
@@ -438,6 +438,9 @@ func (ses *session) Listen(h *sessionHandler, sessionID string, idleTimeout time
 						srv.expandFileName(fmt.Sprintf("${log_dir}\\err_%s_${datetime}.log", transport.task.reqUserName)))
 				}()
 				transport.rcvChannel <- res
+				if res.StatusCode == otasker.StatusRequestWasInterrupted {
+					return
+				}
 			}
 		case <-time.After(idleTimeout):
 			{
@@ -472,7 +475,9 @@ func (ses *session) send(task *taskInfo) chan otasker.OracleTaskResult {
 
 	r, ok := ses.rcvChannels[task.taskID]
 	if !ok {
-		r = make(chan otasker.OracleTaskResult)
+		// Канал делаем буферизованным. Если даже никто не ждет получения ответа,
+		// все равно произойдет выход из Listen
+		r = make(chan otasker.OracleTaskResult, 1)
 		t := taskaskTransport{*task, r}
 		ses.rcvChannels[task.taskID] = r
 		ses.srcChannel <- t
@@ -537,8 +542,16 @@ func (h *sessionHandler) owaInternalHandler(rw http.ResponseWriter, r *http.Requ
 }
 
 func (ses *session) Close() {
+	ses.Lock()
+	defer ses.Unlock()
+	close(ses.srcChannel)
+	for _, v := range ses.rcvChannels {
+		close(v)
+	}
 	if ses.tasker != nil {
-		ses.tasker.CloseAndFree()
+		// Очистку объекта делаем асинхронной, поскольку она ждет закрытия курсоров
+		go ses.tasker.CloseAndFree()
+		ses.tasker = nil
 	}
 }
 
