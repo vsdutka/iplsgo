@@ -244,7 +244,6 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			h.responseFixedPage(w, "rbreakr", nil)
 		}
-		//h.removeSessionHandler(st.sessionID)
 		return
 	}
 
