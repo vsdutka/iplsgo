@@ -508,10 +508,9 @@ func (ses *session) SendAndRead(task *taskInfo, timeOut time.Duration) otasker.O
 				if taskID == task.taskID {
 					/* Сигнализируем о том, что идет выполнение этого запроса и нужно показать червяка */
 					return otasker.OracleTaskResult{StatusCode: otasker.StatusWaitPage, Duration: int64(time.Since(taskSarted) / time.Second)}
-				} else {
-					/* Сигнализируем о том, что идет выполнение этого запроса и нужно показать червяка */
-					return otasker.OracleTaskResult{StatusCode: otasker.StatusBreakPage, Duration: int64(time.Since(taskSarted) / time.Second)}
 				}
+				/* Сигнализируем о том, что идет выполнение этого запроса и нужно показать червяка */
+				return otasker.OracleTaskResult{StatusCode: otasker.StatusBreakPage, Duration: int64(time.Since(taskSarted) / time.Second)}
 			}
 		}
 	}
