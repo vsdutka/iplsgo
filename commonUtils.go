@@ -50,8 +50,12 @@ func makeTaskID(req *http.Request) string {
 }
 
 func makeWaitForm(req *http.Request, messageID string) string {
-	s := "<form id=\"__gmrf__\" action=\"" + req.URL.Path + "\" method=\"post\" >\n"
-	for key, vals := range req.Form {
+	s := req.URL.Path
+	if req.URL.RawQuery != "" {
+		s = s + "?" + req.URL.RawQuery
+	}
+	s = "<form id=\"__gmrf__\" action=\"" + s + "\" method=\"post\" >\n"
+	for key, vals := range req.PostForm {
 		for val := range vals {
 			s = s + "<input type=\"hidden\" name=\"" + key + "\" value=\"" + url.QueryEscape(vals[val]) + "\">\n"
 		}
