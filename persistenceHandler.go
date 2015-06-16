@@ -79,9 +79,7 @@ type sessionHandler struct {
 	paramsMutex      sync.RWMutex
 	sessionList      map[string]*session
 	sessionListMutex sync.Mutex
-	taskerCreator    func(f func(op *otasker.OracleOperation), streamID string) otasker.OracleTasker
-	opStoreChan      chan otasker.OracleOperation
-	opStoreTermChan  chan int
+	taskerCreator    func(operationLoggerName, streamID string) otasker.OracleTasker
 }
 
 //func (task *sessionTask) MarshalJSON() ([]byte, error) {
@@ -113,37 +111,15 @@ type sessionHandler struct {
 
 //}
 
-func newSessionHandler(srv *applicationServer, fn func(f func(op *otasker.OracleOperation), streamID string) otasker.OracleTasker) *sessionHandler {
+func newSessionHandler(srv *applicationServer, fn func(operationLoggerName, streamID string) otasker.OracleTasker) *sessionHandler {
 	h := &sessionHandler{srv: srv,
 		params: sessionHandlerParams{
 			templates: make(map[string]string),
 			users:     make(map[string]sessionHandlerUser),
 		},
-		sessionList:     make(map[string]*session),
-		taskerCreator:   fn,
-		opStoreChan:     make(chan otasker.OracleOperation, 10000),
-		opStoreTermChan: make(chan int),
+		sessionList:   make(map[string]*session),
+		taskerCreator: fn,
 	}
-	go func(h *sessionHandler) {
-		for {
-			select {
-			case ltask := <-h.opStoreChan:
-				{
-					b, err := json.Marshal(&ltask)
-					if err != nil {
-						fmt.Println(err)
-					}
-					//FIXME убрать многократные проверки
-					srv.checkDirExists(h.OpsFileName())
-					writeToFile(h.OpsFileName(), b)
-				}
-			case <-h.opStoreTermChan:
-				{
-					return
-				}
-			}
-		}
-	}(h)
 	return h
 }
 func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
@@ -229,7 +205,7 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ses.sessionID = st.sessionID
 			ses.srcChannel = make(chan taskaskTransport, 1000)
 			ses.rcvChannels = make(map[string]chan otasker.OracleTaskResult)
-			ses.tasker = h.taskerCreator(h.sendOp, st.sessionID)
+			ses.tasker = h.taskerCreator(h.OpsFileName(), st.sessionID)
 			go ses.Listen(h, st.sessionID, h.SessionIdleTimeout())
 			h.sessionList[st.sessionID] = ses
 		}
@@ -400,13 +376,6 @@ func (h *sessionHandler) createTaskInfo(r *http.Request) (taskInfo, bool) {
 
 	_, st.reqProc = filepath.Split(path.Clean(r.URL.Path))
 	return st, true
-}
-
-func (h *sessionHandler) sendOp(op *otasker.OracleOperation) {
-
-	if h.StoreOps() {
-		h.opStoreChan <- *op
-	}
 }
 
 func (ses *session) Listen(h *sessionHandler, sessionID string, idleTimeout time.Duration) {
