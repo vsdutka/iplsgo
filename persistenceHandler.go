@@ -5,6 +5,7 @@ import (
 	//"gopkg.in/errgo.v1"
 	"encoding/json"
 	"fmt"
+	"github.com/vsdutka/nspercent-encoding"
 	"github.com/vsdutka/otasker"
 	"html/template"
 	"mime"
@@ -82,35 +83,6 @@ type sessionHandler struct {
 	taskerCreator    func(operationLoggerName, streamID string) otasker.OracleTasker
 }
 
-//func (task *sessionTask) MarshalJSON() ([]byte, error) {
-//	fmt.Println("ffff")
-//	return json.Marshal(map[string]interface{}{
-//		"SessionID":         task.sessionID,
-//		"TaskID":            task.taskID,
-//		"TaskNum":           task.taskNum,
-//		"TaskBg":            task.taskBg,
-//		"TaskFn":            task.taskFn,
-//		"ReqUserName":       task.reqUserName,
-//		"ReqUserPass":       task.reqUserPass,
-//		"ReqDumpStatements": task.reqDumpStatements,
-//		"ReqSID":            task.reqSID,
-//		"ReqParamStoreProc": task.reqParamStoreProc,
-//		"ReqBeforeScript":   task.reqBeforeScript,
-//		"ReqAfterScript":    task.reqAfterScript,
-//		"ReqDocumentTable":  task.reqDocumentTable,
-//		"ReqCGIEnv":         task.reqCGIEnv,
-//		"ReqProc":           task.reqProc,
-//		"ReqParams":         task.reqParams,
-//		"ReqFiles":          task.reqFiles,
-//		"ResDuration":       task.resDuration,
-//		"RresStatusCode":    task.resStatusCode,
-//		"ResContentType":    task.resContentType,
-//		"ResHeaders":        task.resHeaders,
-//		"ResContent":        task.resContent,
-//	})
-
-//}
-
 func newSessionHandler(srv *applicationServer, fn func(operationLoggerName, streamID string) otasker.OracleTasker) *sessionHandler {
 	h := &sessionHandler{srv: srv,
 		params: sessionHandlerParams{
@@ -177,13 +149,14 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 		func(aparams sessionHandlerParams) {
 			h.paramsMutex.Lock()
 			defer h.paramsMutex.Unlock()
-			//fmt.Println(aparams)
 			h.params = aparams
 		}(p)
 	}
 }
 
 func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r.URL.RawQuery = NSPercentEncoding.FixNonStandardPercentEncoding(r.URL.RawQuery)
+
 	if h.owaInternalHandler(w, r) {
 		return
 	}
