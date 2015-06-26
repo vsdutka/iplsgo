@@ -4,7 +4,7 @@ package main
 import (
 	//"io/ioutil"
 	"net/http"
-	//"net/http/httptest"
+	"net/http/httptest"
 	//"os"
 	//"path"
 	//"strings"
@@ -12,12 +12,12 @@ import (
 	"testing"
 )
 
-//func PerformRequest(r http.Handler, method, path string) *httptest.ResponseRecorder {
-//	req, _ := http.NewRequest(method, path, nil)
-//	w := httptest.NewRecorder()
-//	r.ServeHTTP(w, req)
-//	return w
-//}
+func PerformRequest(r http.Handler, method, path string) *httptest.ResponseRecorder {
+	req, _ := http.NewRequest(method, path, nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
 
 func testMuxOK(t *testing.T, mux *HttpServeMux, method, url string) {
 	w := PerformRequest(mux, method, url)

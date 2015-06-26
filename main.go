@@ -26,9 +26,9 @@ type program struct {
 
 func (p *program) Start(s service.Service) error {
 	if service.Interactive() {
-		logger.Info("Running in terminal.")
+		logger.Infof("Service \"%s\" is running in terminal.", srv.ServiceDispName())
 	} else {
-		logger.Info("Running under service manager.")
+		logger.Infof("Service \"%s\" is running under service manager.", srv.ServiceDispName())
 	}
 	p.exit = make(chan struct{})
 
@@ -38,8 +38,7 @@ func (p *program) Start(s service.Service) error {
 }
 func (p *program) run() {
 	srv.Start()
-	logger.Info("Instance was prepared successfully")
-	logger.Infof("%s is running on %v.", srv.ServiceDispName(), service.Platform())
+	logger.Infof("Service \"%s\" is started.", srv.ServiceDispName())
 
 	for {
 		select {
@@ -50,8 +49,9 @@ func (p *program) run() {
 }
 func (p *program) Stop(s service.Service) error {
 	// Any work in Stop should be quick, usually a few seconds at most.
-	logger.Info("I'm Stopping!")
+	logger.Infof("Service \"%s\" is stopping.", srv.ServiceDispName())
 	srv.Stop()
+	logger.Infof("Service \"%s\" is stopped.", srv.ServiceDispName())
 	close(p.exit)
 	return nil
 }

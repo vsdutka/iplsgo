@@ -138,7 +138,6 @@ func (s *applicationServer) Start() {
 
 }
 func (s *applicationServer) Stop() {
-	fmt.Println("Stop")
 	s.closeConfigChan <- true
 }
 func (s *applicationServer) ServiceName() string {
@@ -209,7 +208,7 @@ func (s *applicationServer) prepareConfigReader(cancelChan chan bool, timeout ti
 
 	go func(cancelChan chan bool, timeout time.Duration) {
 		username, password, sid := oracle.SplitDSN(*dsnFlag)
-		conn, err := oracle.NewConnection(username, password, sid, false)
+		var conn *oracle.Connection
 		defer func() {
 			if conn != nil {
 				if conn.IsConnected() {
@@ -217,12 +216,9 @@ func (s *applicationServer) prepareConfigReader(cancelChan chan bool, timeout ti
 				}
 			}
 		}()
-		if err != nil {
-			log.Printf("Unable to connect to config DB: %s\n", *dsnFlag)
-			log.Fatal(err)
-		}
+
 		// Первоначальное чтение конфигурации
-		err = s.readConfig(conn)
+		err := s.readConfig(&conn, username, password, sid)
 		if err != nil {
 			log.Fatalf("Unable to read configuration: %s\n", err)
 		}
@@ -245,14 +241,17 @@ func (s *applicationServer) prepareConfigReader(cancelChan chan bool, timeout ti
 			select {
 			case <-cancelChan:
 				{
-					fmt.Println("cancel")
 					return
 				}
 			case <-time.After(timeout):
 				{
 					bg := time.Now()
-					s.readConfig(conn)
-					confLogger.Printf("Configuration was read in %6.4f seconds\n", time.Since(bg).Seconds())
+					err := s.readConfig(&conn, username, password, sid)
+					if err != nil {
+						confLogger.Printf("Configuration was read in %6.4f seconds with error. Error: %S\n", time.Since(bg).Seconds(), otasker.UnMask(err))
+					} else {
+						confLogger.Printf("Configuration was read in %6.4f seconds\n", time.Since(bg).Seconds())
+					}
 				}
 
 			}
@@ -261,7 +260,7 @@ func (s *applicationServer) prepareConfigReader(cancelChan chan bool, timeout ti
 	wg.Wait()
 }
 
-func (s *applicationServer) readConfig(conn *oracle.Connection) error {
+func (s *applicationServer) readConfig(conn **oracle.Connection, username, password, sid string) error {
 	const stm = `declare
   param_name    sys.owa.vc_arr;
   param_val     sys.owa.vc_arr;
@@ -291,19 +290,26 @@ begin
   dbms_session.modify_package_state(dbms_session.reinitialize);
 end;`
 
-	if conn == nil {
-		return errgo.New("Invalid connection")
-	}
-	err := conn.Ping()
-	if err != nil {
-		conn.Close()
-		err = conn.Connect(0, false)
+	var err error
+
+	if *conn == nil {
+		*conn, err = oracle.NewConnection(username, password, sid, false)
 		if err != nil {
 			// Выходим. Прочитать не получиться
 			return errgo.Newf("Unable to read configuration: %s", otasker.UnMask(err))
 		}
+	} else {
+		err = (*conn).Ping()
+		if err != nil {
+			(*conn).Close()
+			(*conn), err = oracle.NewConnection(username, password, sid, false)
+			if err != nil {
+				// Выходим. Прочитать не получиться
+				return errgo.Newf("Unable to read configuration: %s", otasker.UnMask(err))
+			}
+		}
 	}
-	cur := conn.NewCursor()
+	cur := (*conn).NewCursor()
 	defer cur.Close()
 
 	var (
