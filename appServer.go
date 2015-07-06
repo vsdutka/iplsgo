@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	//_ "expvar"
 	"fmt"
-	"github.com/ajays20078/go-http-logger"
 	"github.com/kardianos/osext"
 	"github.com/vsdutka/otasker"
 	"gopkg.in/errgo.v1"
@@ -74,14 +73,6 @@ func (s *applicationServer) Start() {
 		}
 	}(s.config.HTTPDebugPort)
 	go func(HttpPort int, HttpSsl bool, HttpSslCert string, HttpSslKey string, h http.Handler) {
-		//FIXMI Добавить переключение на другой файл после перехода на следующий день
-		fileName := s.expandFileName("${log_dir}\\ex${date}.log")
-		s.checkDirExists(fileName)
-		accessFileHandler, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		defer accessFileHandler.Close()
 
 		serverHTTP := &http.Server{Addr: fmt.Sprintf(":%d", HttpPort),
 			ReadTimeout:  time.Duration(s.config.HTTPReadTimeout) * time.Millisecond,
@@ -90,7 +81,7 @@ func (s *applicationServer) Start() {
 			//			ConnState: func(conn net.Conn, cs http.ConnState) {
 			//				fmt.Println(conn.RemoteAddr(), " - state ", cs)
 			//			},
-			Handler: httpLogger.WriteLog(h, accessFileHandler)}
+			Handler: WriteLog(h, s)}
 
 		if HttpSsl {
 			err := func() error {
