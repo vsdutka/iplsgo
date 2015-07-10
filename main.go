@@ -2,9 +2,9 @@ package main
 
 import (
 	"flag"
-	"github.com/kardianos/service"
-	//_ "github.com/mkevac/debugcharts"
 	"fmt"
+	"github.com/kardianos/service"
+
 	"gopkg.in/goracle.v1/oracle"
 	"log"
 	"runtime"

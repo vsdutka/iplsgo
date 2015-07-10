@@ -37,6 +37,7 @@ func WriteLog(handle http.Handler, s *applicationServer) http.HandlerFunc {
 			lastLogging time.Time = time.Time{}
 			logFile     *os.File
 			err         error
+			str         string
 		)
 		defer func() {
 			if logFile != nil {
@@ -45,7 +46,7 @@ func WriteLog(handle http.Handler, s *applicationServer) http.HandlerFunc {
 		}()
 		for {
 			select {
-			case str := <-logChan:
+			case str = <-logChan:
 				{
 					if lastLogging.Format("2006_01_02") != time.Now().Format("2006_01_02") {
 						if logFile != nil {

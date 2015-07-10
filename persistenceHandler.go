@@ -36,7 +36,7 @@ type taskInfo struct {
 	reqFiles          *otasker.Form
 }
 
-type taskaskTransport struct {
+type taskTransport struct {
 	task       taskInfo
 	rcvChannel chan otasker.OracleTaskResult
 }
@@ -45,7 +45,7 @@ type session struct {
 	sync.Mutex
 	tasker          otasker.OracleTasker
 	sessionID       string
-	srcChannel      chan taskaskTransport
+	srcChannel      chan taskTransport
 	rcvChannels     map[string]chan otasker.OracleTaskResult
 	currTaskID      string
 	currTaskStarted time.Time
@@ -94,6 +94,7 @@ func newSessionHandler(srv *applicationServer, fn func(operationLoggerName, stre
 	}
 	return h
 }
+
 func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 	type _tUser struct {
 		Name           string
@@ -123,43 +124,63 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 	if err := json.Unmarshal(*conf, &t); err != nil {
 		logger.Error(err)
 	} else {
-		p := sessionHandlerParams{sessionIdleTimeout: t.SessionIdleTimeout,
-			sessionWaitTimeout: t.SessionWaitTimeout,
-			requestUserInfo:    t.RequestUserInfo,
-			defUserName:        t.DefUserName,
-			defUserPass:        t.DefUserPass,
-			beforeScript:       t.BeforeScript,
-			afterScript:        t.AfterScript,
-			paramStoreProc:     t.ParamStoreProc,
-			documentTable:      t.DocumentTable,
-			opsFileName:        srv.expandFileName(t.OpsFileName),
-			storeOps:           srv.expandFileName(t.OpsFileName) != "",
-			templates:          make(map[string]string),
-			users:              make(map[string]sessionHandlerUser)}
-
-		for _, v := range t.Templates {
-			p.templates[v.Code] = v.Body
-		}
-
-		for _, v := range t.Users {
-			p.users[v.Name] = sessionHandlerUser{isSpecial: v.IsSpecial,
-				connStr:        v.SID,
-				dumpStatements: v.DumpStatements}
-		}
-		func(aparams sessionHandlerParams) {
+		func() {
 			h.paramsMutex.Lock()
-			defer h.paramsMutex.Unlock()
-			h.params = aparams
-		}(p)
+			defer func() {
+				h.paramsMutex.Unlock()
+			}()
+
+			h.params.sessionIdleTimeout = t.SessionIdleTimeout
+			h.params.sessionWaitTimeout = t.SessionWaitTimeout
+			h.params.requestUserInfo = t.RequestUserInfo
+			h.params.defUserName = t.DefUserName
+			h.params.defUserPass = t.DefUserPass
+			h.params.beforeScript = t.BeforeScript
+			h.params.afterScript = t.AfterScript
+			h.params.paramStoreProc = t.ParamStoreProc
+			h.params.documentTable = t.DocumentTable
+			h.params.opsFileName = srv.expandFileName(t.OpsFileName)
+			h.params.storeOps = srv.expandFileName(t.OpsFileName) != ""
+
+			for k, _ := range h.params.templates {
+				delete(h.params.templates, k)
+			}
+			for k, _ := range t.Templates {
+				h.params.templates[t.Templates[k].Code] = t.Templates[k].Body
+			}
+			for k, _ := range h.params.users {
+				//userPool.Put(h.params.users[k])
+				delete(h.params.users, k)
+			}
+			for k, _ := range t.Users {
+				//				u, ok := userPool.Get().(sessionHandlerUser)
+				//				if !ok {
+				//					u = sessionHandlerUser{
+				//						isSpecial:      t.Users[k].IsSpecial,
+				//						connStr:        t.Users[k].SID,
+				//						dumpStatements: t.Users[k].DumpStatements,
+				//					}
+				//				} else {
+				//					u.isSpecial = t.Users[k].IsSpecial
+				//					u.connStr = t.Users[k].SID
+				//					u.dumpStatements = t.Users[k].DumpStatements
+				//				}
+				h.params.users[t.Users[k].Name] = sessionHandlerUser{
+					isSpecial:      t.Users[k].IsSpecial,
+					connStr:        t.Users[k].SID,
+					dumpStatements: t.Users[k].DumpStatements,
+				}
+			}
+		}()
 	}
 }
 
 func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL.RawQuery = NSPercentEncoding.FixNonStandardPercentEncoding(r.URL.RawQuery)
-
 	if h.owaInternalHandler(w, r) {
 		return
 	}
+	r.URL.RawQuery = NSPercentEncoding.FixNonStandardPercentEncoding(r.URL.RawQuery)
+
 	st, ok := h.createTaskInfo(r)
 	if !ok {
 		w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", r.Host))
@@ -176,7 +197,7 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !found {
 			ses = &session{}
 			ses.sessionID = st.sessionID
-			ses.srcChannel = make(chan taskaskTransport, 1000)
+			ses.srcChannel = make(chan taskTransport, 1000)
 			ses.rcvChannels = make(map[string]chan otasker.OracleTaskResult)
 			ses.tasker = h.taskerCreator(h.OpsFileName(), st.sessionID)
 			go ses.Listen(h, st.sessionID, h.SessionIdleTimeout())
@@ -406,8 +427,6 @@ func (ses *session) setCurrentTaskID(taskID string) {
 		ses.currTaskStarted = time.Now()
 	}
 	ses.currTaskID = taskID
-	//	fmt.Println("ses.currTaskID      = ", ses.currTaskID)
-	//	fmt.Println("ses.currTaskStarted = ", ses.currTaskStarted)
 }
 
 func (ses *session) send(task *taskInfo) chan otasker.OracleTaskResult {
@@ -419,7 +438,7 @@ func (ses *session) send(task *taskInfo) chan otasker.OracleTaskResult {
 		// Канал делаем буферизованным. Если даже никто не ждет получения ответа,
 		// все равно произойдет выход из Listen
 		r = make(chan otasker.OracleTaskResult, 1)
-		t := taskaskTransport{*task, r}
+		t := taskTransport{*task, r}
 		ses.rcvChannels[task.taskID] = r
 		ses.srcChannel <- t
 	}
@@ -429,6 +448,7 @@ func (ses *session) send(task *taskInfo) chan otasker.OracleTaskResult {
 
 func (ses *session) SendAndRead(task *taskInfo, timeOut time.Duration) otasker.OracleTaskResult {
 	r := ses.send(task)
+	timer := time.NewTimer(timeOut)
 	for {
 		select {
 		case res := <-r:
@@ -443,8 +463,9 @@ func (ses *session) SendAndRead(task *taskInfo, timeOut time.Duration) otasker.O
 				}()
 				return res
 			}
-		case <-time.After(timeOut):
+		case <-timer.C:
 			{
+				timer.Reset(timeOut)
 				taskID, taskSarted := ses.getCurrentTaskInfo()
 				if taskID == task.taskID {
 					/* Сигнализируем о том, что идет выполнение этого запроса и нужно показать червяка */
@@ -466,9 +487,8 @@ func (h *sessionHandler) owaInternalHandler(rw http.ResponseWriter, r *http.Requ
 			res := struct {
 				Sessions []otasker.OracleTaskInfo
 			}{make([]otasker.OracleTaskInfo, 0)}
-			//FIXME
+
 			for _, val := range h.sessionList {
-				//_ = val
 				res.Sessions = append(res.Sessions, val.tasker.Info())
 			}
 			return res

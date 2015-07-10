@@ -49,7 +49,7 @@ func makeTaskID(req *http.Request) string {
 	return mID
 }
 
-func makeWaitForm(req *http.Request, messageID string) string {
+func makeWaitForm(req *http.Request, taskID string) string {
 	s := req.URL.Path
 	if req.URL.RawQuery != "" {
 		s = s + "?" + req.URL.RawQuery
@@ -70,7 +70,7 @@ func makeWaitForm(req *http.Request, messageID string) string {
 		}
 	}
 	if req.FormValue("MessageId") == "" {
-		s = s + "<input type=\"hidden\" name=\"MessageId\" value=\"" + messageID + "\">\n"
+		s = s + "<input type=\"hidden\" name=\"MessageId\" value=\"" + taskID + "\">\n"
 	}
 	s = s + "</form>"
 	return s
