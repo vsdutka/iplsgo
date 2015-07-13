@@ -8,15 +8,34 @@ import (
 	"gopkg.in/goracle.v1/oracle"
 	"log"
 	"runtime"
+	"sync"
 )
 
-var logger service.Logger
 var (
+	logger       service.Logger
+	loggerLock   sync.Mutex
 	srv          *applicationServer
 	svcFlag      *string
 	dsnFlag      *string
 	confNameFlag *string
 )
+
+func logInfof(format string, a ...interface{}) error {
+	loggerLock.Lock()
+	defer loggerLock.Unlock()
+	if logger != nil {
+		return logger.Infof(format, a...)
+	}
+	return nil
+}
+func logError(v ...interface{}) error {
+	loggerLock.Lock()
+	defer loggerLock.Unlock()
+	if logger != nil {
+		return logger.Error(v)
+	}
+	return nil
+}
 
 // Program structures.
 //  Define Start and Stop methods.
@@ -26,9 +45,9 @@ type program struct {
 
 func (p *program) Start(s service.Service) error {
 	if service.Interactive() {
-		logger.Infof("Service \"%s\" is running in terminal.", srv.ServiceDispName())
+		logInfof("Service \"%s\" is running in terminal.", srv.ServiceDispName())
 	} else {
-		logger.Infof("Service \"%s\" is running under service manager.", srv.ServiceDispName())
+		logInfof("Service \"%s\" is running under service manager.", srv.ServiceDispName())
 	}
 	p.exit = make(chan struct{})
 
@@ -38,7 +57,7 @@ func (p *program) Start(s service.Service) error {
 }
 func (p *program) run() {
 	srv.Start()
-	logger.Infof("Service \"%s\" is started.", srv.ServiceDispName())
+	logInfof("Service \"%s\" is started.", srv.ServiceDispName())
 
 	for {
 		select {
@@ -49,9 +68,9 @@ func (p *program) run() {
 }
 func (p *program) Stop(s service.Service) error {
 	// Any work in Stop should be quick, usually a few seconds at most.
-	logger.Infof("Service \"%s\" is stopping.", srv.ServiceDispName())
+	logInfof("Service \"%s\" is stopping.", srv.ServiceDispName())
 	srv.Stop()
-	logger.Infof("Service \"%s\" is stopped.", srv.ServiceDispName())
+	logInfof("Service \"%s\" is stopped.", srv.ServiceDispName())
 	close(p.exit)
 	return nil
 }
@@ -86,10 +105,14 @@ func main() {
 		log.Fatal(err)
 	}
 	errs := make(chan error, 5)
-	logger, err = s.Logger(errs)
-	if err != nil {
-		log.Fatal(err)
-	}
+	func() {
+		loggerLock.Lock()
+		defer loggerLock.Unlock()
+		logger, err = s.Logger(errs)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	go func() {
 		for {
@@ -110,6 +133,6 @@ func main() {
 	}
 	err = s.Run()
 	if err != nil {
-		logger.Error(err)
+		logError(err)
 	}
 }

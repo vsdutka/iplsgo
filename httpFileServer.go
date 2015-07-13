@@ -47,7 +47,7 @@ func (f *httpFileHandler) SetConfig(conf *json.RawMessage) {
 	}
 	t := _t{}
 	if err := json.Unmarshal(*conf, &t); err != nil {
-		logger.Error(err)
+		logError(err)
 	} else {
 		func() {
 			f.mu.Lock()

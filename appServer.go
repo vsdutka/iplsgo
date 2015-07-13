@@ -48,8 +48,8 @@ func newApplicationServer() *applicationServer {
 	s.configReader = newConfigReader(
 		*dsnFlag,
 		*confNameFlag,
-		time.Hour*5,
-		s.expandFileName("${log_dir}\\confReader.log"),
+		time.Second*10,
+		//s.expandFileName("${log_dir}\\confReader.log"),
 		s.setServerConfig,
 	)
 	return &s
@@ -68,15 +68,22 @@ func (s *applicationServer) Load() {
 }
 
 func (s *applicationServer) Start() {
+	if s.HTTPDebugPort() != 0 {
+		logInfof("Debug listener starting on port \"%d\"\n", s.HTTPDebugPort())
+	}
 	go func(HttpDebugPort int) {
 		if HttpDebugPort != 0 {
 			if err := http.ListenAndServe(fmt.Sprintf(":%d", HttpDebugPort), nil); err != nil {
-				log.Fatal(err)
+				logError(err)
 			}
 		}
 	}(s.HTTPDebugPort())
+	if s.HTTPSsl() {
+		logInfof("Main listener starting on port \"%d\" with SSL support\n", s.HTTPPort())
+	} else {
+		logInfof("Main listener starting on port \"%d\"\n", s.HTTPPort())
+	}
 	go func() {
-
 		serverHTTP := &http.Server{Addr: fmt.Sprintf(":%d", s.HTTPPort()),
 			ReadTimeout:  time.Duration(s.HTTPReadTimeout()) * time.Millisecond,
 			WriteTimeout: time.Duration(s.HTTPWriteTimeout()) * time.Millisecond,
@@ -117,11 +124,11 @@ func (s *applicationServer) Start() {
 			}()
 
 			if err != nil {
-				log.Fatal(err)
+				logError(err)
 			}
 		} else {
 			if err := serverHTTP.ListenAndServe(); err != nil {
-				log.Fatal(err)
+				logError(err)
 			}
 		}
 
@@ -216,22 +223,23 @@ func (s *applicationServer) setServerConfig(
 	httpLogDir string,
 	handlersConfig []json.RawMessage,
 ) error {
-
-	func() {
-		s.configMutex.Lock()
-		defer s.configMutex.Unlock()
-		s.serviceName = serviceName
-		s.serviceDispName = serviceDispName
-		s.httpPort = httpPort
-		s.httpDebugPort = httpDebugPort
-		s.httpReadTimeout = httpReadTimeout
-		s.httpWriteTimeout = httpWriteTimeout
-		s.httpSsl = httpSsl
-		s.httpSslCert = httpSslCert
-		s.httpSslKey = httpSslKey
-		s.httpLogDir = httpLogDir
-	}()
-
+	if !s.configReaded {
+		// Параметры HTTP сервера можно устанавливать только при старте сервера
+		func() {
+			s.configMutex.Lock()
+			defer s.configMutex.Unlock()
+			s.serviceName = serviceName
+			s.serviceDispName = serviceDispName
+			s.httpPort = httpPort
+			s.httpDebugPort = httpDebugPort
+			s.httpReadTimeout = httpReadTimeout
+			s.httpWriteTimeout = httpWriteTimeout
+			s.httpSsl = httpSsl
+			s.httpSslCert = httpSslCert
+			s.httpSslKey = httpSslKey
+			s.httpLogDir = httpLogDir
+		}()
+	}
 	type _t struct {
 		Path   string `json:"Path"`
 		Type   string `json:"Type"`

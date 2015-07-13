@@ -52,9 +52,8 @@ type session struct {
 }
 
 type sessionHandlerUser struct {
-	isSpecial      bool
-	connStr        string
-	dumpStatements bool
+	isSpecial bool
+	connStr   string
 }
 
 type sessionHandlerParams struct {
@@ -68,7 +67,6 @@ type sessionHandlerParams struct {
 	paramStoreProc     string
 	documentTable      string
 	opsFileName        string
-	storeOps           bool
 	templates          map[string]string
 	users              map[string]sessionHandlerUser
 }
@@ -122,7 +120,7 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 	}
 	t := _t{}
 	if err := json.Unmarshal(*conf, &t); err != nil {
-		logger.Error(err)
+		logError(err)
 	} else {
 		func() {
 			h.paramsMutex.Lock()
@@ -140,7 +138,6 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 			h.params.paramStoreProc = t.ParamStoreProc
 			h.params.documentTable = t.DocumentTable
 			h.params.opsFileName = srv.expandFileName(t.OpsFileName)
-			h.params.storeOps = srv.expandFileName(t.OpsFileName) != ""
 
 			for k, _ := range h.params.templates {
 				delete(h.params.templates, k)
@@ -166,9 +163,8 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 				//					u.dumpStatements = t.Users[k].DumpStatements
 				//				}
 				h.params.users[t.Users[k].Name] = sessionHandlerUser{
-					isSpecial:      t.Users[k].IsSpecial,
-					connStr:        t.Users[k].SID,
-					dumpStatements: t.Users[k].DumpStatements,
+					isSpecial: t.Users[k].IsSpecial,
+					connStr:   t.Users[k].SID,
 				}
 			}
 		}()
@@ -352,14 +348,13 @@ func (h *sessionHandler) createTaskInfo(r *http.Request) (taskInfo, bool) {
 	}
 	st.reqFiles, _ = otasker.ParseMultipartFormEx(r, 64<<20)
 
-	isSpecial, connStr, dumpStatements := h.userInfo(st.reqUserName)
+	isSpecial, connStr := h.userInfo(st.reqUserName)
 	if connStr == "" {
 		return st, false
 	}
 	st.sessionID = makeHandlerID(isSpecial, st.reqUserName, st.reqUserPass, r.Header.Get("DebugIP"), r)
 	st.taskID = makeTaskID(r)
 	st.reqConnStr = connStr
-	st.reqDumpStatements = dumpStatements
 	st.reqDocumentTable = h.DocumentTable()
 	st.reqParamStoreProc = h.ParamStoreProc()
 	st.reqBeforeScript = h.BeforeScript()
@@ -561,11 +556,6 @@ func (h *sessionHandler) DocumentTable() string {
 	return h.params.documentTable
 }
 
-func (h *sessionHandler) StoreOps() bool {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	return h.params.storeOps
-}
 func (h *sessionHandler) OpsFileName() string {
 	h.paramsMutex.RLock()
 	defer h.paramsMutex.RUnlock()
@@ -628,12 +618,12 @@ func (h *sessionHandler) responseFixedPage(res http.ResponseWriter, pageName str
 	}
 }
 
-func (h *sessionHandler) userInfo(user string) (isSpecial bool, connStr string, dumpStatements bool) {
+func (h *sessionHandler) userInfo(user string) (isSpecial bool, connStr string) {
 	h.paramsMutex.RLock()
 	defer h.paramsMutex.RUnlock()
 	u, ok := h.params.users[strings.ToUpper(user)]
 	if !ok {
-		return false, "", false
+		return false, ""
 	}
-	return u.isSpecial, u.connStr, u.dumpStatements
+	return u.isSpecial, u.connStr
 }
