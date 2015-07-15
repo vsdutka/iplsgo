@@ -56,6 +56,10 @@ type sessionHandlerUser struct {
 	connStr   string
 }
 
+var usersFree = sync.Pool{
+	New: func() interface{} { return new(sessionHandlerUser) },
+}
+
 type sessionHandlerParams struct {
 	sessionIdleTimeout int
 	sessionWaitTimeout int
@@ -66,9 +70,8 @@ type sessionHandlerParams struct {
 	afterScript        string
 	paramStoreProc     string
 	documentTable      string
-	opsFileName        string
 	templates          map[string]string
-	users              map[string]sessionHandlerUser
+	users              map[string]*sessionHandlerUser
 }
 
 type sessionHandler struct {
@@ -78,14 +81,14 @@ type sessionHandler struct {
 	paramsMutex      sync.RWMutex
 	sessionList      map[string]*session
 	sessionListMutex sync.Mutex
-	taskerCreator    func(operationLoggerName, streamID string) otasker.OracleTasker
+	taskerCreator    func() otasker.OracleTasker
 }
 
-func newSessionHandler(srv *applicationServer, fn func(operationLoggerName, streamID string) otasker.OracleTasker) *sessionHandler {
+func newSessionHandler(srv *applicationServer, fn func() otasker.OracleTasker) *sessionHandler {
 	h := &sessionHandler{srv: srv,
 		params: sessionHandlerParams{
 			templates: make(map[string]string),
-			users:     make(map[string]sessionHandlerUser),
+			users:     make(map[string]*sessionHandlerUser),
 		},
 		sessionList:   make(map[string]*session),
 		taskerCreator: fn,
@@ -114,7 +117,6 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 		AfterScript        string       `json:"owa.AfterScript"`
 		ParamStoreProc     string       `json:"owa.ParamStroreProc"`
 		DocumentTable      string       `json:"owa.DocumentTable"`
-		OpsFileName        string       `json:"owa.OpsFileName"`
 		Templates          []_tTemplate `json:"owa.Templates"`
 		Users              []_tUser     `json:"owa.Users"`
 	}
@@ -137,7 +139,6 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 			h.params.afterScript = t.AfterScript
 			h.params.paramStoreProc = t.ParamStoreProc
 			h.params.documentTable = t.DocumentTable
-			h.params.opsFileName = srv.expandFileName(t.OpsFileName)
 
 			for k, _ := range h.params.templates {
 				delete(h.params.templates, k)
@@ -146,26 +147,21 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 				h.params.templates[t.Templates[k].Code] = t.Templates[k].Body
 			}
 			for k, _ := range h.params.users {
-				//userPool.Put(h.params.users[k])
+				usersFree.Put(h.params.users[k])
 				delete(h.params.users, k)
 			}
 			for k, _ := range t.Users {
-				//				u, ok := userPool.Get().(sessionHandlerUser)
-				//				if !ok {
-				//					u = sessionHandlerUser{
-				//						isSpecial:      t.Users[k].IsSpecial,
-				//						connStr:        t.Users[k].SID,
-				//						dumpStatements: t.Users[k].DumpStatements,
-				//					}
-				//				} else {
-				//					u.isSpecial = t.Users[k].IsSpecial
-				//					u.connStr = t.Users[k].SID
-				//					u.dumpStatements = t.Users[k].DumpStatements
-				//				}
-				h.params.users[t.Users[k].Name] = sessionHandlerUser{
-					isSpecial: t.Users[k].IsSpecial,
-					connStr:   t.Users[k].SID,
+				u, ok := usersFree.Get().(*sessionHandlerUser)
+				if !ok {
+					u = &sessionHandlerUser{
+						isSpecial: t.Users[k].IsSpecial,
+						connStr:   t.Users[k].SID,
+					}
+				} else {
+					u.isSpecial = t.Users[k].IsSpecial
+					u.connStr = t.Users[k].SID
 				}
+				h.params.users[t.Users[k].Name] = u
 			}
 		}()
 	}
@@ -178,6 +174,13 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.URL.RawQuery = NSPercentEncoding.FixNonStandardPercentEncoding(r.URL.RawQuery)
 
 	st, ok := h.createTaskInfo(r)
+	defer func() {
+		for k := range st.reqCGIEnv {
+			delete(st.reqCGIEnv, k)
+		}
+		st = nil
+	}()
+
 	if !ok {
 		w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", r.Host))
 		w.WriteHeader(http.StatusUnauthorized)
@@ -195,7 +198,7 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ses.sessionID = st.sessionID
 			ses.srcChannel = make(chan taskTransport, 1000)
 			ses.rcvChannels = make(map[string]chan otasker.OracleTaskResult)
-			ses.tasker = h.taskerCreator(h.OpsFileName(), st.sessionID)
+			ses.tasker = h.taskerCreator()
 			go ses.Listen(h, st.sessionID, h.SessionIdleTimeout())
 			h.sessionList[st.sessionID] = ses
 		}
@@ -213,7 +216,7 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := ses.SendAndRead(&st, h.SessionWaitTimeout())
+	res := ses.SendAndRead(st, h.SessionWaitTimeout())
 
 	switch res.StatusCode {
 	case otasker.StatusErrorPage:
@@ -319,9 +322,9 @@ func (h *sessionHandler) removeSessionHandler(sessionID string) {
 	ses.Close()
 }
 
-func (h *sessionHandler) createTaskInfo(r *http.Request) (taskInfo, bool) {
+func (h *sessionHandler) createTaskInfo(r *http.Request) (*taskInfo, bool) {
 	ok := true
-	st := taskInfo{}
+	st := &taskInfo{}
 	st.reqUserName, st.reqUserPass, ok = r.BasicAuth()
 
 	remoteUser := st.reqUserName
@@ -443,7 +446,6 @@ func (ses *session) send(task *taskInfo) chan otasker.OracleTaskResult {
 
 func (ses *session) SendAndRead(task *taskInfo, timeOut time.Duration) otasker.OracleTaskResult {
 	r := ses.send(task)
-	timer := time.NewTimer(timeOut)
 	for {
 		select {
 		case res := <-r:
@@ -458,9 +460,8 @@ func (ses *session) SendAndRead(task *taskInfo, timeOut time.Duration) otasker.O
 				}()
 				return res
 			}
-		case <-timer.C:
+		case <-time.After(timeOut):
 			{
-				timer.Reset(timeOut)
 				taskID, taskSarted := ses.getCurrentTaskInfo()
 				if taskID == task.taskID {
 					/* Сигнализируем о том, что идет выполнение этого запроса и нужно показать червяка */
@@ -554,12 +555,6 @@ func (h *sessionHandler) DocumentTable() string {
 	h.paramsMutex.RLock()
 	defer h.paramsMutex.RUnlock()
 	return h.params.documentTable
-}
-
-func (h *sessionHandler) OpsFileName() string {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	return h.params.opsFileName
 }
 
 func (h *sessionHandler) templateBody(templateName string) (string, bool) {
