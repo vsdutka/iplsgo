@@ -4,7 +4,9 @@ package main
 import (
 	//"gopkg.in/errgo.v1"
 	"encoding/json"
+	"expvar"
 	"fmt"
+	"github.com/vsdutka/expvarmon"
 	"github.com/vsdutka/nspercent-encoding"
 	"github.com/vsdutka/otasker"
 	"html/template"
@@ -18,6 +20,12 @@ import (
 	"sync"
 	"time"
 )
+
+var numberOfSessions = expvar.NewInt("PersistentHandler_Number_Of_Sessions")
+
+func init() {
+	expvarmon.RegisterVariableInfo("PersistentHandler_Number_Of_Sessions", "Number of persistent sessions", "Pieces", "p")
+}
 
 type taskInfo struct {
 	sessionID         string
@@ -201,6 +209,7 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ses.tasker = h.taskerCreator()
 			go ses.Listen(h, st.sessionID, h.SessionIdleTimeout())
 			h.sessionList[st.sessionID] = ses
+			numberOfSessions.Add(1)
 		}
 		return ses
 	}()
@@ -320,6 +329,7 @@ func (h *sessionHandler) removeSessionHandler(sessionID string) {
 	ses := h.sessionList[sessionID]
 	delete(h.sessionList, sessionID)
 	ses.Close()
+	numberOfSessions.Add(-1)
 }
 
 func (h *sessionHandler) createTaskInfo(r *http.Request) (*taskInfo, bool) {

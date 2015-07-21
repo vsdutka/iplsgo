@@ -2,17 +2,25 @@
 package main
 
 import (
-	//"bytes"
 	"encoding/json"
+	"expvar"
+	"github.com/vsdutka/expvarmon"
 	"github.com/vsdutka/otasker"
 	"gopkg.in/errgo.v1"
 	"gopkg.in/goracle.v1/oracle"
-	//"io"
 	"log"
 	"os"
 	"sync"
 	"time"
 )
+
+var (
+	configReadDuration = expvar.NewFloat("config_read_duration")
+)
+
+func init() {
+	expvarmon.RegisterVariableInfo("config_read_duration", "Config read duration", "Seconds", "s")
+}
 
 type configReader struct {
 	cancelWg   sync.WaitGroup
@@ -26,7 +34,7 @@ func (cr *configReader) shutdown() {
 func newConfigReader(
 	dsn, configName string,
 	timeout time.Duration,
-	//logFileName string,
+
 	serverCallback func(
 		serviceName, serviceDispName string,
 		httpPort, httpDebugPort, httpReadTimeout, httpWriteTimeout int,
@@ -115,7 +123,7 @@ func newConfigReader(
 							ServiceName:      "iPLSGo",
 							ServiceDispName:  "iPLSGo Server",
 							HTTPPort:         10111,
-							HTTPDebugPort:    8888,
+							HTTPDebugPort:    0,
 							HTTPReadTimeout:  15000,
 							HTTPWriteTimeout: 15000,
 							HTTPSsl:          false,
@@ -222,6 +230,7 @@ func newConfigReader(
 						logInfof("Configuration was read in %6.4f seconds\n", time.Since(bg).Seconds())
 						//confLogger.Printf("Configuration was read in %6.4f seconds\n", time.Since(bg).Seconds())
 					}
+					configReadDuration.Set(time.Since(bg).Seconds())
 				}
 			}
 		}

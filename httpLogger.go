@@ -2,12 +2,20 @@
 package main
 
 import (
+	"expvar"
 	"fmt"
+	"github.com/vsdutka/expvarmon"
 	"log"
 	"net/http"
 	"os"
 	"time"
 )
+
+var countOfRequests = expvar.NewInt("Http_Number_Of_Requests")
+
+func init() {
+	expvarmon.RegisterVariableInfo("Http_Number_Of_Requests", "# of http recuest", "Items", "i")
+}
 
 type statusWriter struct {
 	http.ResponseWriter
@@ -66,6 +74,9 @@ func WriteLog(handle http.Handler, s *applicationServer) http.HandlerFunc {
 		}
 	}()
 	return func(w http.ResponseWriter, request *http.Request) {
+		countOfRequests.Add(1)
+		defer countOfRequests.Add(-1)
+
 		start := time.Now()
 		writer := statusWriter{w, 0, 0}
 		handle.ServeHTTP(&writer, request)
@@ -77,7 +88,6 @@ func WriteLog(handle http.Handler, s *applicationServer) http.HandlerFunc {
 		if !ok {
 			user = "-"
 		}
-		//"%s, %s, %02d.%02d.%02d, %02d:%02d:%02d, %s, %s, %d, %d, %d, %d, %s, %s, %v\n"
 		url := request.RequestURI
 
 		params := request.Form.Encode()
@@ -90,10 +100,6 @@ func WriteLog(handle http.Handler, s *applicationServer) http.HandlerFunc {
 			user,
 			end.Format("2006.01.02"),
 			end.Format("15:04:05.000000000"),
-			//			end.Day(),
-			//			end.Hour(),
-			//			end.Minute(),
-			//			end.Second(),
 			request.Proto,
 			request.Host,
 			length,
@@ -104,11 +110,5 @@ func WriteLog(handle http.Handler, s *applicationServer) http.HandlerFunc {
 			url,
 			latency,
 		)
-
-		//		if request.URL.RawQuery != "" {
-		//			logChan <- fmt.Sprintf("%v %s %s \"%s %s%s%s %s\" %d %d \"%s\" %v", end.Format("2006/01/02 15:04:05"), request.Host, request.RemoteAddr, request.Method, request.URL.Path, "?", request.URL.RawQuery, request.Proto, statusCode, length, request.Header.Get("User-Agent"), latency)
-		//		} else {
-		//			logChan <- fmt.Sprintf("%v %s %s \"%s %s %s\" %d %d \"%s\" %v", end.Format("2006/01/02 15:04:05"), request.Host, request.RemoteAddr, request.Method, request.URL.Path, request.Proto, statusCode, length, request.Header.Get("User-Agent"), latency)
-		//		}
 	}
 }

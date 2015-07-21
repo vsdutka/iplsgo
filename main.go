@@ -4,9 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/kardianos/service"
-
-	"gopkg.in/goracle.v1/oracle"
 	"log"
+	"os"
 	"runtime"
 	"sync"
 )
@@ -83,11 +82,17 @@ func (p *program) Stop(s service.Service) error {
 //   Run the service.
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	oracle.IsDebug = false
-	svcFlag = flag.String("service", "", "Control the system service.")
-	dsnFlag = flag.String("dsn", "", "Oracle DSN (user/passw@sid)")
-	confNameFlag = flag.String("conf", "", "Configuration name")
+
+	flag.Usage = usage
+	svcFlag = flag.String("service", "", fmt.Sprintf("Control the system service. Valid actions: %q\n", service.ControlAction))
+	dsnFlag = flag.String("dsn", "", "    Oracle DSN (user/passw@sid)")
+	confNameFlag = flag.String("conf", "", "   Configuration name")
 	flag.Parse()
+
+	if (*confNameFlag == "") || (*dsnFlag == "") {
+		usage()
+		os.Exit(2)
+	}
 
 	srv = newApplicationServer()
 	srv.Load()
@@ -135,4 +140,16 @@ func main() {
 	if err != nil {
 		logError(err)
 	}
+}
+
+const usageTemplate = `iplsgo is OWA/APEX listener
+
+Usage: iplsgo commands
+
+The commands are:
+`
+
+func usage() {
+	fmt.Fprintln(os.Stderr, usageTemplate)
+	flag.PrintDefaults()
 }

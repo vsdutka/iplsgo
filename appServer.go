@@ -4,12 +4,10 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
-	//_ "expvar"
+	"expvar"
 	"fmt"
 	"github.com/kardianos/osext"
 	"github.com/vsdutka/otasker"
-
-	_ "github.com/mkevac/debugcharts"
 	"io/ioutil"
 	"log"
 	"net"
@@ -52,6 +50,7 @@ func newApplicationServer() *applicationServer {
 		//s.expandFileName("${log_dir}\\confReader.log"),
 		s.setServerConfig,
 	)
+
 	return &s
 }
 
@@ -66,6 +65,8 @@ func (s *applicationServer) Load() {
 	}
 	s.configReadedWg.Wait()
 }
+
+var connCounter = expvar.NewInt("open_connections")
 
 func (s *applicationServer) Start() {
 	if s.HTTPDebugPort() != 0 {
@@ -88,9 +89,14 @@ func (s *applicationServer) Start() {
 			ReadTimeout:  time.Duration(s.HTTPReadTimeout()) * time.Millisecond,
 			WriteTimeout: time.Duration(s.HTTPWriteTimeout()) * time.Millisecond,
 			//Позволяет отслеживать состояние клиентского соединения
-			//			ConnState: func(conn net.Conn, cs http.ConnState) {
-			//				fmt.Println(conn.RemoteAddr(), " - state ", cs)
-			//			},
+			ConnState: func(conn net.Conn, cs http.ConnState) {
+				switch cs {
+				case http.StateNew:
+					connCounter.Add(1)
+				case http.StateClosed:
+					connCounter.Add(-1)
+				}
+			},
 			Handler: WriteLog(s.mux, s)}
 
 		if s.HTTPSsl() {
