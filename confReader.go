@@ -55,12 +55,10 @@ func newConfigReader(
 			confNameVar  *oracle.Variable
 			hostNameVar  *oracle.Variable
 			confLinesVar *oracle.Variable
-			buffer       []byte = make([]byte, 10000*256)
-
-			username string
-			password string
-			sid      string
-			hostName string
+			username     string
+			password     string
+			sid          string
+			hostName     string
 		)
 		defer func() {
 			if cur != nil {
@@ -73,17 +71,6 @@ func newConfigReader(
 			}
 			wg.Done()
 		}()
-
-		//		//TODO решить проблему с тем, что на момент создания читальщика еще нет параметров сервера и невозможно определить имя файла
-		//		fileConfLog, err := os.OpenFile(logFileName, os.O_RDWR|os.O_APPEND, 0666)
-		//		if err != nil {
-		//			fileConfLog, err = os.OpenFile(logFileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-		//			if err != nil {
-		//				log.Fatalf("Unable to open log file: %s\n", err)
-		//			}
-		//		}
-		//		defer fileConfLog.Close()
-		//		confLogger := log.New(fileConfLog, "", log.Ldate|log.Ltime|log.Lmicroseconds)
 
 		username, password, sid = oracle.SplitDSN(dsn)
 		if hostName, err = os.Hostname(); err != nil {
@@ -189,37 +176,39 @@ func newConfigReader(
 							}
 
 						}
-						var lines []interface{} = make([]interface{}, 10000)
-						defer func() { lines = lines[0:0] }()
 
-						if confLinesVar, err = cur.NewArrayVar(oracle.StringVarType, lines, 256); err != nil {
-							return errgo.Newf("error creating variable for %s(%T): %s", confLinesVar, confLinesVar, err)
+						if confLinesVar, err = cur.NewVariable(0, oracle.ClobVarType, 0); err != nil {
+							return errgo.Newf("error creating variable for %s(%T): %s", "ClobVarType", "ClobVarType", err)
 						}
-						defer confLinesVar.Free()
 
 						if err = cur.Execute(stm, nil, map[string]interface{}{"ainstance_name": confNameVar, "ahost_name": hostNameVar, "confLines": confLinesVar}); err != nil {
 							return errgo.Newf("error executing `c.config`: %s", otasker.UnMask(err))
 						}
-						defer func() { buffer = buffer[:0] }()
-						var lineBuf []byte //= make([]byte, 256)
-						for i := 0; i < int(confLinesVar.ArrayLength()); i++ {
-							err = confLinesVar.GetValueInto(&lineBuf, uint(i))
-							if err != nil {
-								return errgo.Newf("cannot get out value for lines: %s", err)
-							}
-							if i == 0 {
-								buffer = lineBuf[:len(lineBuf)]
-							} else {
-								buffer = append(buffer, lineBuf[:len(lineBuf)]...)
-							}
-							lineBuf = lineBuf[:0]
-						}
 
-						err = json.Unmarshal(buffer, &appServerConfig)
+						data, err := confLinesVar.GetValue(0)
 						if err != nil {
-							return errgo.Newf("error parsing configuration: %s", err)
+							return err
 						}
-
+						ext, ok := data.(*oracle.ExternalLobVar)
+						if !ok {
+							return errgo.Newf("data is not *ExternalLobVar, but %T", data)
+						}
+						if ext != nil {
+							size, err := ext.Size(false)
+							if err != nil {
+								return errgo.Newf("size error: ", err)
+							}
+							if size != 0 {
+								buf, err := ext.ReadAll()
+								if err != nil {
+									return err
+								}
+								err = json.Unmarshal(buf, &appServerConfig)
+								if err != nil {
+									return errgo.Newf("error parsing configuration: %s", err)
+								}
+							}
+						}
 						return
 					}()
 
@@ -238,31 +227,10 @@ func newConfigReader(
 	return r
 }
 
-const stm = `declare
-  param_name    sys.owa.vc_arr;
-  param_val     sys.owa.vc_arr;
-  thePage       sys.htp.htbuf_arr;
-  thePageLinesQ integer := 10000;
-  start_line    integer := 0;
-  confLines     sys.htp.htbuf_arr;
+const stm = `
 begin
-  sys.OWA.init_cgi_env(0, param_name, param_val);
-  sys.htp.init;
-  c.config(ainstance_name => :ainstance_name, ahost_name => :ahost_name);
-  sys.htp.flush;
-  sys.OWA.GET_PAGE(thePage, thePageLinesQ);
-  /* Пропускаем HTTP заголовок */
-  for i in 1..thePageLinesQ
-  loop
-    if thePage(i) = sys.owa.NL_CHAR then
-      start_line := i + 1;
-      exit;
-    end if;
-  end loop;
-  /* Формируем результирующий буфер */
-  for i in start_line..thePageLinesQ
-  loop
-    :confLines(i - start_line + 1) := thePage(i);
-  end loop;
+  :confLines := c.config(ainstance_name => :ainstance_name,
+                      ahost_name => :ahost_name);
   dbms_session.modify_package_state(dbms_session.reinitialize);
-end;`
+end;
+`
