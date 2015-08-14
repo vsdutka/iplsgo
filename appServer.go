@@ -34,27 +34,14 @@ type applicationServer struct {
 	httpLogDir       string
 	configMutex      sync.RWMutex
 	configReaded     bool
-	configReadedWg   sync.WaitGroup
-	configReader     *configReader
+	//	configReadedWg   sync.WaitGroup
+	//	configReader     *configReader
 
 	mux *HttpServeMux
 }
 
 func newApplicationServer() *applicationServer {
 	s := applicationServer{mux: NewHttpServeMux(), configReaded: false}
-	s.configReadedWg.Add(1)
-	s.configReader = newConfigReader(
-		*dsnFlag,
-		*confNameFlag,
-		time.Second*10,
-		//s.expandFileName("${log_dir}\\confReader.log"),
-		s.setServerConfig,
-	)
-
-	return &s
-}
-
-func (s *applicationServer) Load() {
 	exeName, err := osext.Executable()
 
 	if err == nil {
@@ -63,8 +50,29 @@ func (s *applicationServer) Load() {
 			s.basePath = filepath.Dir(exeName)
 		}
 	}
-	s.configReadedWg.Wait()
+	//	s.configReadedWg.Add(1)
+	//	s.configReader = newConfigReader(
+	//		*dsnFlag,
+	//		*confNameFlag,
+	//		time.Second*10,
+	//		//s.expandFileName("${log_dir}\\confReader.log"),
+	//		s.setServerConfig,
+	//	)
+
+	return &s
 }
+
+//func (s *applicationServer) Load() {
+//	exeName, err := osext.Executable()
+
+//	if err == nil {
+//		exeName, err = filepath.Abs(exeName)
+//		if err == nil {
+//			s.basePath = filepath.Dir(exeName)
+//		}
+//	}
+//	s.configReadedWg.Wait()
+//}
 
 var connCounter = expvar.NewInt("open_connections")
 
@@ -142,7 +150,7 @@ func (s *applicationServer) Start() {
 
 }
 func (s *applicationServer) Stop() {
-	s.configReader.shutdown()
+	//	s.configReader.shutdown()
 }
 func (s *applicationServer) ServiceName() string {
 	s.configMutex.RLock()
@@ -271,7 +279,7 @@ func (s *applicationServer) setServerConfig(
 	}
 	if !s.configReaded {
 		s.configReaded = true
-		s.configReadedWg.Done()
+		//		s.configReadedWg.Done()
 	}
 	return nil
 }

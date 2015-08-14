@@ -9,12 +9,14 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"time"
 )
 
 var (
 	logger       service.Logger
 	loggerLock   sync.Mutex
 	srv          *applicationServer
+	srvConfig    *Config
 	svcFlag      *string
 	dsnFlag      *string
 	confNameFlag *string
@@ -69,6 +71,7 @@ func (p *program) run() {
 func (p *program) Stop(s service.Service) error {
 	// Any work in Stop should be quick, usually a few seconds at most.
 	logInfof("Service \"%s\" is stopping.", srv.ServiceDispName())
+	srvConfig.Stop()
 	srv.Stop()
 	logInfof("Service \"%s\" is stopped.", srv.ServiceDispName())
 	close(p.exit)
@@ -96,7 +99,8 @@ func main() {
 	}
 
 	srv = newApplicationServer()
-	srv.Load()
+	//srv.Load()
+	srvConfig = NewConfig(*dsnFlag, *confNameFlag, 10*time.Second, srv.setServerConfig)
 
 	svcConfig := &service.Config{
 		Name:        srv.ServiceName(),
