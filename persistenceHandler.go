@@ -72,6 +72,7 @@ type sessionHandlerParams struct {
 	sessionIdleTimeout int
 	sessionWaitTimeout int
 	requestUserInfo    bool
+	requestUserRealm   string
 	defUserName        string
 	defUserPass        string
 	beforeScript       string
@@ -106,10 +107,9 @@ func newSessionHandler(srv *applicationServer, fn func() otasker.OracleTasker) *
 
 func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 	type _tUser struct {
-		Name           string
-		IsSpecial      bool
-		SID            string
-		DumpStatements bool
+		Name      string
+		IsSpecial bool
+		SID       string
 	}
 	type _tTemplate struct {
 		Code string
@@ -119,6 +119,7 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 		SessionIdleTimeout int          `json:"owa.SessionIdleTimeout"`
 		SessionWaitTimeout int          `json:"owa.SessionWaitTimeout"`
 		RequestUserInfo    bool         `json:"owa.ReqUserInfo"`
+		RequestUserRealm   string       `json:"owa.ReqUserRealm"`
 		DefUserName        string       `json:"owa.DBUserName"`
 		DefUserPass        string       `json:"owa.DBUserPass"`
 		BeforeScript       string       `json:"owa.BeforeScript"`
@@ -137,10 +138,10 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 			defer func() {
 				h.paramsMutex.Unlock()
 			}()
-
 			h.params.sessionIdleTimeout = t.SessionIdleTimeout
 			h.params.sessionWaitTimeout = t.SessionWaitTimeout
 			h.params.requestUserInfo = t.RequestUserInfo
+			h.params.requestUserRealm = t.RequestUserRealm
 			h.params.defUserName = t.DefUserName
 			h.params.defUserPass = t.DefUserPass
 			h.params.beforeScript = t.BeforeScript
@@ -190,7 +191,7 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	if !ok {
-		w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", r.Host))
+		w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s%s\"", r.Host, h.RequestUserRealm()))
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte("Unauthorized"))
 		return
@@ -372,7 +373,7 @@ func (h *sessionHandler) createTaskInfo(r *http.Request) (*taskInfo, bool) {
 	st.reqParamStoreProc = h.ParamStoreProc()
 	st.reqBeforeScript = h.BeforeScript()
 	st.reqAfterScript = h.AfterScript()
-	st.reqCGIEnv = makeEnvParams(r, st.reqDocumentTable, remoteUser)
+	st.reqCGIEnv = makeEnvParams(r, st.reqDocumentTable, remoteUser, h.RequestUserRealm()+"/")
 
 	st.reqParams = r.Form
 
@@ -520,7 +521,6 @@ func (ses *session) Close() {
 		ses.tasker = nil
 	}
 }
-
 func (h *sessionHandler) SessionIdleTimeout() time.Duration {
 	h.paramsMutex.RLock()
 	defer h.paramsMutex.RUnlock()
@@ -535,6 +535,11 @@ func (h *sessionHandler) RequestUserInfo() bool {
 	h.paramsMutex.RLock()
 	defer h.paramsMutex.RUnlock()
 	return h.params.requestUserInfo
+}
+func (h *sessionHandler) RequestUserRealm() string {
+	h.paramsMutex.RLock()
+	defer h.paramsMutex.RUnlock()
+	return h.params.requestUserRealm
 }
 func (h *sessionHandler) DefUserName() string {
 	h.paramsMutex.RLock()

@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"expvar"
-	"fmt"
 	"github.com/vsdutka/expvarmon"
 	"github.com/vsdutka/otasker"
 	"gopkg.in/errgo.v1"
@@ -60,7 +59,6 @@ func NewConfig(
 		log.Fatalf("Error read configuration: %s\n", err)
 	}
 
-	fmt.Println(len(buf))
 	if err = parseConfig(buf, serverCallback); err != nil {
 		log.Fatalf("Error parse configuration: %s\n", err)
 	}

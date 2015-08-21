@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func makeEnvParams(req *http.Request, docTab, remoteUser string) map[string]string {
+func makeEnvParams(req *http.Request, docTab, remoteUser, mirror_path string) map[string]string {
 	https := "N"
 	portSequre := "0"
 
@@ -71,5 +71,6 @@ func makeEnvParams(req *http.Request, docTab, remoteUser string) map[string]stri
 		"REQUEST_PROTOCOL":     req.Proto,
 		"REQUEST_SCHEME":       req.Proto,
 		"AUTHORIZATION":        req.Header.Get("Authorization"),
+		"MIRROR_PATH":          mirror_path,
 	}
 }

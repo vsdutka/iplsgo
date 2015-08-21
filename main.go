@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/kardianos/service"
 	_ "golang.org/x/tools/go/ssa"
+	"gopkg.in/goracle.v1/oracle"
 	"log"
 	"os"
 	"runtime"
@@ -13,13 +14,14 @@ import (
 )
 
 var (
-	logger       service.Logger
-	loggerLock   sync.Mutex
-	srv          *applicationServer
-	srvConfig    *Config
-	svcFlag      *string
-	dsnFlag      *string
-	confNameFlag *string
+	logger              service.Logger
+	loggerLock          sync.Mutex
+	srv                 *applicationServer
+	srvConfig           *Config
+	svcFlag             *string
+	dsnFlag             *string
+	confNameFlag        *string
+	confReadTimeoutFlag *int
 )
 
 func logInfof(format string, a ...interface{}) error {
@@ -86,11 +88,13 @@ func (p *program) Stop(s service.Service) error {
 //   Run the service.
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
+	oracle.IsDebug = false
 
 	flag.Usage = usage
 	svcFlag = flag.String("service", "", fmt.Sprintf("Control the system service. Valid actions: %q\n", service.ControlAction))
 	dsnFlag = flag.String("dsn", "", "    Oracle DSN (user/passw@sid)")
 	confNameFlag = flag.String("conf", "", "   Configuration name")
+	confReadTimeoutFlag = flag.Int("conf_tm", 10, "Configuration read timeout in seconds")
 	flag.Parse()
 
 	if (*confNameFlag == "") || (*dsnFlag == "") {
@@ -100,13 +104,13 @@ func main() {
 
 	srv = newApplicationServer()
 	//srv.Load()
-	srvConfig = NewConfig(*dsnFlag, *confNameFlag, 10*time.Second, srv.setServerConfig)
+	srvConfig = NewConfig(*dsnFlag, *confNameFlag, (time.Duration)(*confReadTimeoutFlag)*time.Second, srv.setServerConfig)
 
 	svcConfig := &service.Config{
 		Name:        srv.ServiceName(),
 		DisplayName: srv.ServiceDispName(),
 		Description: srv.ServiceDispName(),
-		Arguments:   []string{fmt.Sprintf("-dsn=%s", *dsnFlag), fmt.Sprintf("-conf=%s", *confNameFlag)},
+		Arguments:   []string{fmt.Sprintf("-dsn=%s", *dsnFlag), fmt.Sprintf("-conf=%s", *confNameFlag), fmt.Sprintf("-conf_tm=%v", *confReadTimeoutFlag)},
 	}
 
 	prg := &program{}
