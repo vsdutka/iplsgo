@@ -2,20 +2,15 @@
 package main
 
 import (
-	"expvar"
 	"fmt"
-	"github.com/vsdutka/expvarmon"
+	"github.com/vsdutka/metrics"
 	"log"
 	"net/http"
 	"os"
 	"time"
 )
 
-var countOfRequests = expvar.NewInt("Http_Number_Of_Requests")
-
-func init() {
-	expvarmon.RegisterVariableInfo("Http_Number_Of_Requests", "# of http recuest", "Items", "i")
-}
+var countOfRequests = metrics.NewInt("Http_Number_Of_Requests", "# of http recuest", "Items", "i")
 
 type statusWriter struct {
 	http.ResponseWriter

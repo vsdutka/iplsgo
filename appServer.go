@@ -4,9 +4,9 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
-	"expvar"
 	"fmt"
 	"github.com/kardianos/osext"
+	"github.com/vsdutka/metrics"
 	"github.com/vsdutka/otasker"
 	"io/ioutil"
 	"log"
@@ -74,7 +74,7 @@ func newApplicationServer() *applicationServer {
 //	s.configReadedWg.Wait()
 //}
 
-var connCounter = expvar.NewInt("open_connections")
+var connCounter = metrics.NewInt("open_connections", "Number of open connections", "", "")
 
 func (s *applicationServer) Start() {
 	if s.HTTPDebugPort() != 0 {

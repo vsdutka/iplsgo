@@ -4,8 +4,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"expvar"
-	"github.com/vsdutka/expvarmon"
+	"github.com/vsdutka/metrics"
 	"github.com/vsdutka/otasker"
 	"gopkg.in/errgo.v1"
 	"gopkg.in/goracle.v1/oracle"
@@ -15,12 +14,8 @@ import (
 )
 
 var (
-	configReadDuration = expvar.NewFloat("config_read_duration")
+	configReadDuration = metrics.NewFloat("config_read_duration", "Config read duration", "Seconds", "s")
 )
-
-func init() {
-	expvarmon.RegisterVariableInfo("config_read_duration", "Config read duration", "Seconds", "s")
-}
 
 type Config struct {
 	stopChan   chan int

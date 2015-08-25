@@ -4,9 +4,8 @@ package main
 import (
 	//"gopkg.in/errgo.v1"
 	"encoding/json"
-	"expvar"
 	"fmt"
-	"github.com/vsdutka/expvarmon"
+	"github.com/vsdutka/metrics"
 	"github.com/vsdutka/nspercent-encoding"
 	"github.com/vsdutka/otasker"
 	"html/template"
@@ -21,11 +20,7 @@ import (
 	"time"
 )
 
-var numberOfSessions = expvar.NewInt("PersistentHandler_Number_Of_Sessions")
-
-func init() {
-	expvarmon.RegisterVariableInfo("PersistentHandler_Number_Of_Sessions", "Number of persistent sessions", "Pieces", "p")
-}
+var numberOfSessions = metrics.NewInt("PersistentHandler_Number_Of_Sessions", "Number of persistent sessions", "Pieces", "p")
 
 type taskInfo struct {
 	sessionID         string
