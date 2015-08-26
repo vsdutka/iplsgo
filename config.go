@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	configReadDuration = metrics.NewFloat("config_read_duration", "Config read duration", "Seconds", "s")
+	configReadDuration = metrics.NewFloat("config_read_duration", "Config - Read duration", "Seconds", "s")
 )
 
 type Config struct {
@@ -121,26 +121,29 @@ func (c *Config) readConfig() ([]byte, error) {
 	var (
 		err error
 	)
+	if c.conn != nil {
+		if !c.conn.IsConnected() {
+			c.conn.Free(true)
+			c.conn = nil
+		} else {
+			if err := c.conn.Ping(); err != nil {
+				c.conn.Close()
+				c.conn.Free(true)
+				c.conn = nil
+			}
+		}
+	}
 	if c.conn == nil {
 		c.conn, err = oracle.NewConnection(c.username, c.password, c.sid, false)
 		if err != nil {
 			// Выходим. Прочитать не получиться
+			if c.conn != nil {
+				c.conn.Free(true)
+			}
 			c.conn = nil
 			return nil, err
 		}
-	} else {
-		err = c.conn.Ping()
-		if err != nil {
-			c.conn.Close()
-			c.conn, err = oracle.NewConnection(c.username, c.password, c.sid, false)
-			if err != nil {
-				// Выходим. Прочитать не получиться
-				c.conn = nil
-				return nil, err
-			}
-		}
 	}
-
 	var (
 		cur          *oracle.Cursor
 		confNameVar  *oracle.Variable
@@ -149,6 +152,7 @@ func (c *Config) readConfig() ([]byte, error) {
 	)
 	cur = c.conn.NewCursor()
 	defer cur.Close()
+
 	if confNameVar, err = cur.NewVar(c.configname); err != nil {
 		return nil, errgo.Newf("error creating variable for %s(%T): %s", c.configname, c.configname, err)
 	}
@@ -163,6 +167,7 @@ func (c *Config) readConfig() ([]byte, error) {
 	defer confLinesVar.Free()
 
 	if err = cur.Execute(stm_read_config, nil, map[string]interface{}{"ainstance_name": confNameVar, "ahost_name": hostNameVar, "confLines": confLinesVar}); err != nil {
+		logInfof("5 err")
 		return nil, errgo.Newf("error executing `c.config`: %s", otasker.UnMask(err))
 	}
 

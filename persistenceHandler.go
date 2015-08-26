@@ -2,7 +2,6 @@
 package main
 
 import (
-	//"gopkg.in/errgo.v1"
 	"encoding/json"
 	"fmt"
 	"github.com/vsdutka/metrics"
@@ -20,7 +19,7 @@ import (
 	"time"
 )
 
-var numberOfSessions = metrics.NewInt("PersistentHandler_Number_Of_Sessions", "Number of persistent sessions", "Pieces", "p")
+var numberOfSessions = metrics.NewInt("PersistentHandler_Number_Of_Sessions", "Server - Number of persistent sessions", "Pieces", "p")
 
 type taskInfo struct {
 	sessionID         string

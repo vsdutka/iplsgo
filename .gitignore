@@ -46,3 +46,4 @@ Temporary Items
 log/iPLSGo_10111/ops.json
 *.exe~
 *.gob
+*.out

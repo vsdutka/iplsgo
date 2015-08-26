@@ -50,31 +50,10 @@ func newApplicationServer() *applicationServer {
 			s.basePath = filepath.Dir(exeName)
 		}
 	}
-	//	s.configReadedWg.Add(1)
-	//	s.configReader = newConfigReader(
-	//		*dsnFlag,
-	//		*confNameFlag,
-	//		time.Second*10,
-	//		//s.expandFileName("${log_dir}\\confReader.log"),
-	//		s.setServerConfig,
-	//	)
-
 	return &s
 }
 
-//func (s *applicationServer) Load() {
-//	exeName, err := osext.Executable()
-
-//	if err == nil {
-//		exeName, err = filepath.Abs(exeName)
-//		if err == nil {
-//			s.basePath = filepath.Dir(exeName)
-//		}
-//	}
-//	s.configReadedWg.Wait()
-//}
-
-var connCounter = metrics.NewInt("open_connections", "Number of open connections", "", "")
+var connCounter = metrics.NewInt("open_connections", "HTTP - Number of open connections", "", "")
 
 func (s *applicationServer) Start() {
 	if s.HTTPDebugPort() != 0 {
