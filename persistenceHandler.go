@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/vsdutka/metrics"
@@ -614,12 +615,28 @@ func (h *sessionHandler) responseFixedPage(res http.ResponseWriter, pageName str
 		h.responseError(res, err.Error())
 		return
 	}
-	res.Header().Set("Content-Type", "text/html; charset=utf-8")
-	err = templ.ExecuteTemplate(res, pageName, data)
+	var buf bytes.Buffer
+	err = templ.ExecuteTemplate(&buf, pageName, data)
 	if err != nil {
 		h.responseError(res, err.Error())
 		return
 	}
+
+	res.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := res.Write(buf.Bytes()); err != nil {
+		// Тут уже нельзя толкать в сокет, поскольку произошла ошибка при отсулке.
+		// Поэтому просто показываем ошибку в логе сервера
+		fmt.Println("responseFixedPage: ", err.Error())
+		return
+	}
+
+	//	res.Header().Set("Content-Type", "text/html; charset=utf-8")
+	//	err = templ.ExecuteTemplate(res, pageName, data)
+	//	if err != nil {
+	//		fmt.Println(err.Error())
+	//		h.responseError(res, err.Error())
+	//		return
+	//	}
 }
 
 func (h *sessionHandler) userInfo(user string) (isSpecial bool, connStr string) {

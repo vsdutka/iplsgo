@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/davecheney/profile"
 	"github.com/kardianos/service"
 	_ "golang.org/x/tools/go/ssa"
 	"gopkg.in/goracle.v1/oracle"
@@ -101,6 +102,13 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
+
+	cfg := profile.Config{
+		CPUProfile:  true,
+		ProfilePath: ".", // store profiles in current directory
+	}
+
+	defer profile.Start(&cfg).Stop()
 
 	srv = newApplicationServer()
 	//srv.Load()
