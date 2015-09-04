@@ -61,17 +61,9 @@ func (s *applicationServer) Start() {
 	}
 	go func(HttpDebugPort int) {
 		if HttpDebugPort != 0 {
-			debugHTTP := &http.Server{Addr: fmt.Sprintf(":%d", HttpDebugPort),
-				ReadTimeout:  240 * time.Second,
-				WriteTimeout: 240 * time.Second,
-				Handler:      nil,
-			}
-			if err := debugHTTP.ListenAndServe(); err != nil {
+			if err := http.ListenAndServe(fmt.Sprintf(":%d", HttpDebugPort), nil); err != nil {
 				logError(err)
 			}
-			//			if err := http.ListenAndServe(fmt.Sprintf(":%d", HttpDebugPort), nil); err != nil {
-			//				logError(err)
-			//			}
 		}
 	}(s.HTTPDebugPort())
 	if s.HTTPSsl() {
