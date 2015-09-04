@@ -80,8 +80,6 @@ func NewConfig(
 				}
 			case <-timer.C:
 				{
-					timer.Reset(timeout)
-
 					bg := time.Now()
 					err = func() (err error) {
 						var buf []byte
@@ -105,6 +103,9 @@ func NewConfig(
 						//confLogger.Printf("Configuration was read in %6.4f seconds\n", time.Since(bg).Seconds())
 					}
 					configReadDuration.Set(time.Since(bg).Seconds())
+					// Инициируем следующий тик через timeout
+					timer.Reset(timeout)
+
 				}
 			}
 		}
@@ -223,8 +224,8 @@ func parseConfig(
 		ServiceDispName:  "iPLSGo Server",
 		HTTPPort:         10111,
 		HTTPDebugPort:    0,
-		HTTPReadTimeout:  15000,
-		HTTPWriteTimeout: 15000,
+		HTTPReadTimeout:  240000,
+		HTTPWriteTimeout: 240000,
 		HTTPSsl:          false,
 		HTTPSslCert:      "",
 		HTTPSslKey:       "",
