@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -165,7 +166,7 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 					u.isSpecial = t.Users[k].IsSpecial
 					u.connStr = t.Users[k].SID
 				}
-				h.params.users[t.Users[k].Name] = u
+				h.params.users[strings.ToUpper(t.Users[k].Name)] = u
 			}
 		}()
 	}
@@ -483,18 +484,21 @@ func (ses *session) SendAndRead(task *taskInfo, timeOut time.Duration) otasker.O
 func (h *sessionHandler) owaInternalHandler(rw http.ResponseWriter, r *http.Request) bool {
 	_, p := filepath.Split(path.Clean(r.URL.Path))
 	if p == "!" {
-		s := func() struct{ Sessions []otasker.OracleTaskInfo } {
+		sortKeyName := r.FormValue("Sort")
+		s := func() struct{ Sessions otasker.OracleTaskInfos } {
 			h.sessionListMutex.Lock()
 			defer h.sessionListMutex.Unlock()
 			res := struct {
-				Sessions []otasker.OracleTaskInfo
-			}{make([]otasker.OracleTaskInfo, 0)}
+				Sessions otasker.OracleTaskInfos
+			}{make(otasker.OracleTaskInfos, 0)}
 
 			for _, val := range h.sessionList {
-				res.Sessions = append(res.Sessions, val.tasker.Info())
+				res.Sessions = append(res.Sessions, val.tasker.Info(sortKeyName))
 			}
 			return res
 		}()
+
+		sort.Sort(s.Sessions)
 
 		h.responseFixedPage(rw, "sessions", s)
 
@@ -568,6 +572,9 @@ func (h *sessionHandler) DocumentTable() string {
 }
 
 func (h *sessionHandler) templateBody(templateName string) (string, bool) {
+	if templateName == "sessions" {
+		return sessions, true
+	}
 	h.paramsMutex.RLock()
 	defer h.paramsMutex.RUnlock()
 	templateBody, ok := h.params.templates[templateName]
@@ -648,3 +655,107 @@ func (h *sessionHandler) userInfo(user string) (isSpecial bool, connStr string) 
 	}
 	return u.isSpecial, u.connStr
 }
+
+const (
+	sessions = `<HTML>
+<HEAD>
+<TITLE>Список сессий виртуальной директории</TITLE>
+<META HTTP-EQUIV="Expires" CONTENT="0"/>
+<script src="https://rolf-asw1:63088/i/libraries/apex/minified/desktop_all.min.js?v=4.2.1.00.08" type="text/javascript"></script>
+<style>
+  table {
+    border: 1px solid black; /* Рамка вокруг таблицы */
+    border-collapse: collapse; /* Отображать только одинарные линии */
+  }
+  th {
+    text-align: center; /* Выравнивание по левому краю */
+    font-weight:bold;
+    background: #ccc; /* Цвет фона ячеек */
+    padding: 2px; /* Поля вокруг содержимого ячеек */
+    border: 1px solid black; /* Граница вокруг ячеек */
+  }
+  td {
+    padding: 2px; /* Поля вокруг содержимого ячеек */
+    border: 1px solid black; /* Граница вокруг ячеек */
+    font-family: Arial;
+    font-size: 10pt;
+  }
+</style>
+
+<script>
+function dp() {
+  if(navigator.appName.indexOf("Microsoft") > -1){
+    return "block";
+  }
+  else {
+    return "table-row";
+  }
+}
+function chD(r, rNum, n){
+  var v = document.all[n];
+  var temp1 = rNum;
+  if (v != undefined) {
+    if (v.length == undefined) {
+      v.style.display = v.style.display=='none' ?  dp() : 'none';
+      if (v.style.display=='none') temp1 = 1;
+    }
+    else {
+      for (i=0; i<v.length; i++)
+      {
+        v[i].style.display = v[i].style.display=='none' ?  dp() : 'none';
+      }
+      if (v[0].style.display=='none') temp1 = 1;
+    }
+    $("#"+ r + " td.ch").prop("rowspan", temp1);
+  }
+}
+</script>
+</HEAD>
+<BODY>
+  <H3>Список сессий виртуальной директории</H3>
+  <TABLE>
+    <thead>
+      <TR>
+        <th>#</th>
+        <th><a href="!?Sort=Created">Создано</a></th>
+        <th><a href="!?Sort=UserName">Пользователь</a></th>
+        <th><a href="!?Sort=SessionID">Session</a></th>
+        <th><a href="!?Sort=Database">Строка соединения</a></th>
+        <th><a href="!?Sort=MessageID">Id</a></th>
+        <th><a href="!?Sort=NowInProcess">Состояние выполнения</a></th>
+		<th><a href="!?Sort=NowInProcess">Шаг</a></th>
+        <th><a href="!?Sort=IdleTime">Время простоя, msec</a></th>
+        <th><a href="!?Sort=LastDuration">Время выполнения запроса, msec</a></th>
+        <th><a href="!?Sort=RequestProceeded">Кол-во запусков на исполнение</a></th>
+      </TR>
+    </thead>
+{{range $key, $data := .Sessions}}
+<TR name="rid{{$key}}" id="rid{{$key}}" STYLE="background-color: {{if eq $data.NowInProcess true}}#00FF00{{else}}white{{end}}; color: black; cursor: Hand;" onClick="{chD('rid{{$key}}',{{$data.StepNum}},'id{{$key}}')}" >
+  <TD align="center" class="ch">{{$key}}</TD>
+  <TD align="center" nowrap class="ch">{{ $data.Created}}</TD>
+  <TD align="center" class="ch">{{ $data.UserName}}</TD>
+  <TD align="center" nowrap>{{ $data.SessionID}}</TD>
+  <td align="center" nowrap>{{ $data.Database}}</td>
+  <TD align="center" nowrap>{{ $data.MessageID}}</TD>
+  <TD align="center">{{if eq $data.NowInProcess true}}Выполняется{{else}}Простаивает{{end}}</TD>
+  <TD align="center" nowrap>{{ $data.StepName}}</TD>
+  <TD align="right">{{ $data.IdleTime}}</TD>
+  <TD align="right">{{ $data.LastDuration}}</TD>
+  <TD align="right">{{ $data.RequestProceeded}}</TD>
+</TR>
+{{range $k, $v := $data.LastSteps}}
+<tr name="id{{$key}}" id="id{{$key}}" style="display: none; background-color:{{if eq $data.NowInProcess true}}#00FF00{{else}}white{{end}} color: black; cursor: Hand;">
+<td>{{$k}}</td>
+<td nowrap>{{$v.Name}}</td>
+<td align="right">{{$v.Duration}} msec</td>
+<td colspan="5"><pre><code class="sql">{{$v.Statement}}</code></pre></td>
+</tr>
+{{end}}
+{{end}}
+</TABLE>
+</BODY>
+</HTML>
+`
+)
+
+//{{end}}

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 )
 
 func writeToFile(fileName string, data []byte) error {
@@ -38,7 +39,7 @@ func makeHandlerID(isSpecial bool, userName, userPass, debugIP string, req *http
 		}
 	}
 	host, _, _ := net.SplitHostPort(addr)
-	return userName + "|" + userPass + "|" + host + "|" + debugIP
+	return strings.ToUpper(userName + "|" + userPass + "|" + host + "|" + debugIP)
 }
 
 func makeTaskID(req *http.Request) string {
