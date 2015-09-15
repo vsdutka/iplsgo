@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-var countOfRequests = metrics.NewInt("Http_Number_Of_Requests", "HTTP - Number of http recuest", "Items", "i")
+var countOfRequests = metrics.NewInt("Http_Number_Of_Requests", "HTTP - Number of http requests", "Items", "i")
 
 type statusWriter struct {
 	http.ResponseWriter

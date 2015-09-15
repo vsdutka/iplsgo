@@ -55,14 +55,14 @@ type session struct {
 	currTaskStarted time.Time
 }
 
-type sessionHandlerUser struct {
-	isSpecial bool
-	connStr   string
-}
+//type sessionHandlerUser struct {
+//	isSpecial bool
+//	connStr   string
+//}
 
-var usersFree = sync.Pool{
-	New: func() interface{} { return new(sessionHandlerUser) },
-}
+//var usersFree = sync.Pool{
+//	New: func() interface{} { return new(sessionHandlerUser) },
+//}
 
 type sessionHandlerParams struct {
 	sessionIdleTimeout int
@@ -76,7 +76,8 @@ type sessionHandlerParams struct {
 	paramStoreProc     string
 	documentTable      string
 	templates          map[string]string
-	users              map[string]*sessionHandlerUser
+	//	users              map[string]*sessionHandlerUser
+	grps map[int32]string
 }
 
 type sessionHandler struct {
@@ -93,7 +94,8 @@ func newSessionHandler(srv *applicationServer, fn func() otasker.OracleTasker) *
 	h := &sessionHandler{srv: srv,
 		params: sessionHandlerParams{
 			templates: make(map[string]string),
-			users:     make(map[string]*sessionHandlerUser),
+			//			users:     make(map[string]*sessionHandlerUser),
+			grps: make(map[int32]string),
 		},
 		sessionList:   make(map[string]*session),
 		taskerCreator: fn,
@@ -102,10 +104,14 @@ func newSessionHandler(srv *applicationServer, fn func() otasker.OracleTasker) *
 }
 
 func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
-	type _tUser struct {
-		Name      string
-		IsSpecial bool
-		SID       string
+	//	type _tUser struct {
+	//		Name      string
+	//		IsSpecial bool
+	//		SID       string
+	//	}
+	type _tGrp struct {
+		ID  int32
+		SID string
 	}
 	type _tTemplate struct {
 		Code string
@@ -123,7 +129,8 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 		ParamStoreProc     string       `json:"owa.ParamStroreProc"`
 		DocumentTable      string       `json:"owa.DocumentTable"`
 		Templates          []_tTemplate `json:"owa.Templates"`
-		Users              []_tUser     `json:"owa.Users"`
+		//		Users              []_tUser     `json:"owa.Users"`
+		Grps []_tGrp `json:"owa.UserGroups"`
 	}
 	t := _t{}
 	if err := json.Unmarshal(*conf, &t); err != nil {
@@ -151,22 +158,26 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 			for k, _ := range t.Templates {
 				h.params.templates[t.Templates[k].Code] = t.Templates[k].Body
 			}
-			for k, _ := range h.params.users {
-				usersFree.Put(h.params.users[k])
-				delete(h.params.users, k)
-			}
-			for k, _ := range t.Users {
-				u, ok := usersFree.Get().(*sessionHandlerUser)
-				if !ok {
-					u = &sessionHandlerUser{
-						isSpecial: t.Users[k].IsSpecial,
-						connStr:   t.Users[k].SID,
-					}
-				} else {
-					u.isSpecial = t.Users[k].IsSpecial
-					u.connStr = t.Users[k].SID
-				}
-				h.params.users[strings.ToUpper(t.Users[k].Name)] = u
+			//			for k, _ := range h.params.users {
+			//				usersFree.Put(h.params.users[k])
+			//				delete(h.params.users, k)
+			//			}
+			//			for k, _ := range t.Users {
+			//				u, ok := usersFree.Get().(*sessionHandlerUser)
+			//				if !ok {
+			//					u = &sessionHandlerUser{
+			//						isSpecial: t.Users[k].IsSpecial,
+			//						connStr:   t.Users[k].SID,
+			//					}
+			//				} else {
+			//					u.isSpecial = t.Users[k].IsSpecial
+			//					u.connStr = t.Users[k].SID
+			//				}
+			//				h.params.users[strings.ToUpper(t.Users[k].Name)] = u
+			//			}
+			h.params.grps = make(map[int32]string)
+			for k, _ := range t.Grps {
+				h.params.grps[t.Grps[k].ID] = t.Grps[k].SID
 			}
 		}()
 	}
@@ -332,6 +343,7 @@ func (h *sessionHandler) removeSessionHandler(sessionID string) {
 func (h *sessionHandler) createTaskInfo(r *http.Request) (*taskInfo, bool) {
 	ok := true
 	st := &taskInfo{}
+
 	st.reqUserName, st.reqUserPass, ok = r.BasicAuth()
 
 	remoteUser := st.reqUserName
@@ -674,14 +686,23 @@ func (h *sessionHandler) responseFixedPage(res http.ResponseWriter, pageName str
 	//	}
 }
 
-func (h *sessionHandler) userInfo(user string) (isSpecial bool, connStr string) {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	u, ok := h.params.users[strings.ToUpper(user)]
+func (h *sessionHandler) userInfo(user string) (bool, string) {
+	if user == "" {
+		return false, ""
+	}
+	isSpecial, grpId, ok := GetUserInfo(user)
 	if !ok {
 		return false, ""
 	}
-	return u.isSpecial, u.connStr
+	h.paramsMutex.RLock()
+	defer h.paramsMutex.RUnlock()
+	//	u, ok := h.params.users[strings.ToUpper(user)]
+
+	if sid, ok := h.params.grps[grpId]; !ok {
+		return false, ""
+	} else {
+		return isSpecial, sid
+	}
 }
 
 const (
