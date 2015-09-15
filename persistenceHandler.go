@@ -201,7 +201,7 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !found {
 			ses = &session{}
 			ses.sessionID = st.sessionID
-			ses.srcChannel = make(chan taskTransport, 1000)
+			ses.srcChannel = make(chan taskTransport, 10)
 			ses.rcvChannels = make(map[string]chan otasker.OracleTaskResult)
 			ses.tasker = h.taskerCreator()
 			go ses.Listen(h, st.sessionID, h.SessionIdleTimeout())
@@ -434,25 +434,53 @@ func (ses *session) setCurrentTaskID(taskID string) {
 	ses.currTaskID = taskID
 }
 
-func (ses *session) send(task *taskInfo) chan otasker.OracleTaskResult {
-	ses.Lock()
-	defer ses.Unlock()
+//func (ses *session) send(task *taskInfo) chan otasker.OracleTaskResult {
+//	ses.Lock()
+//	defer ses.Unlock()
 
-	r, ok := ses.rcvChannels[task.taskID]
-	if !ok {
-		// Канал делаем буферизованным. Если даже никто не ждет получения ответа,
-		// все равно произойдет выход из Listen
-		r = make(chan otasker.OracleTaskResult, 1)
-		t := taskTransport{*task, r}
-		ses.rcvChannels[task.taskID] = r
-		ses.srcChannel <- t
-	}
+//	r, ok := ses.rcvChannels[task.taskID]
+//	if !ok {
+//		// Канал делаем буферизованным. Если даже никто не ждет получения ответа,
+//		// все равно произойдет выход из Listen
+//		r = make(chan otasker.OracleTaskResult, 1)
+//		t := taskTransport{*task, r}
+//		ses.rcvChannels[task.taskID] = r
+//		ses.srcChannel <- t
+//	}
 
-	return r
-}
+//	return r
+//}
 
 func (ses *session) SendAndRead(task *taskInfo, timeOut time.Duration) otasker.OracleTaskResult {
-	r := ses.send(task)
+	//r := ses.send(task)
+	r, busy, busySeconds := func() (chan otasker.OracleTaskResult, bool, int64) {
+		ses.Lock()
+		defer ses.Unlock()
+
+		r, ok := ses.rcvChannels[task.taskID]
+		if !ok {
+			// Если длина канала > 0, то значит что-то уже отправили на выполнение
+			// и это не то же, что отправляют сейчас.
+			// Значит, какал занят
+			if len(ses.srcChannel) > 0 {
+				return nil, true, 0
+			}
+			//Обращаемся к защищенным переменным на прямую, поскольку уже внутри блока ses.Lock
+			if (ses.currTaskID != "") && (ses.currTaskID != task.taskID) {
+				return nil, true, int64(time.Since(ses.currTaskStarted) / time.Second)
+			}
+			// Канал делаем буферизованным. Если даже никто не ждет получения ответа,
+			// все равно произойдет выход из Listen
+			r = make(chan otasker.OracleTaskResult, 1)
+			t := taskTransport{*task, r}
+			ses.rcvChannels[task.taskID] = r
+			ses.srcChannel <- t
+		}
+		return r, false, 0
+	}()
+	if busy {
+		return otasker.OracleTaskResult{StatusCode: otasker.StatusBreakPage, Duration: busySeconds}
+	}
 	for {
 		select {
 		case res := <-r:
@@ -727,6 +755,7 @@ function chD(r, rNum, n){
         <th><a href="!?Sort=IdleTime">Время простоя, msec</a></th>
         <th><a href="!?Sort=LastDuration">Время выполнения запроса, msec</a></th>
         <th><a href="!?Sort=RequestProceeded">Кол-во запусков на исполнение</a></th>
+		<th><a href="!?Sort=ErrorsNumber">Кол-во ошибок</a></th>
       </TR>
     </thead>
 {{range $key, $data := .Sessions}}
@@ -742,13 +771,14 @@ function chD(r, rNum, n){
   <TD align="right">{{ $data.IdleTime}}</TD>
   <TD align="right">{{ $data.LastDuration}}</TD>
   <TD align="right">{{ $data.RequestProceeded}}</TD>
+  <TD align="right">{{ $data.ErrorsNumber}}</TD> 
 </TR>
 {{range $k, $v := $data.LastSteps}}
 <tr name="id{{$key}}" id="id{{$key}}" style="display: none; background-color:{{if eq $data.NowInProcess true}}#00FF00{{else}}white{{end}} color: black; cursor: Hand;">
 <td>{{$k}}</td>
 <td nowrap>{{$v.Name}}</td>
 <td align="right">{{$v.Duration}} msec</td>
-<td colspan="5"><pre><code class="sql">{{$v.Statement}}</code></pre></td>
+<td colspan="6"><pre><code class="sql">{{$v.Statement}}</code></pre></td>
 </tr>
 {{end}}
 {{end}}

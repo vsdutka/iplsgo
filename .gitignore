@@ -47,3 +47,4 @@ log/iPLSGo_10111/ops.json
 *.exe~
 *.gob
 *.out
+*.pprof
