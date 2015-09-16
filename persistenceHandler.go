@@ -28,7 +28,6 @@ type taskInfo struct {
 	taskID            string
 	reqUserName       string
 	reqUserPass       string
-	reqDumpStatements bool
 	reqConnStr        string
 	reqParamStoreProc string
 	reqBeforeScript   string
