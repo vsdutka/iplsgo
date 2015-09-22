@@ -55,15 +55,6 @@ type session struct {
 	currTaskStarted time.Time
 }
 
-//type sessionHandlerUser struct {
-//	isSpecial bool
-//	connStr   string
-//}
-
-//var usersFree = sync.Pool{
-//	New: func() interface{} { return new(sessionHandlerUser) },
-//}
-
 type sessionHandlerParams struct {
 	sessionIdleTimeout int
 	sessionWaitTimeout int
@@ -76,8 +67,7 @@ type sessionHandlerParams struct {
 	paramStoreProc     string
 	documentTable      string
 	templates          map[string]string
-	//	users              map[string]*sessionHandlerUser
-	grps map[int32]string
+	grps               map[int32]string
 }
 
 type sessionHandler struct {
@@ -190,12 +180,6 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.URL.RawQuery = NSPercentEncoding.FixNonStandardPercentEncoding(r.URL.RawQuery)
 
 	st, ok := h.createTaskInfo(r)
-	defer func() {
-		for k := range st.reqCGIEnv {
-			delete(st.reqCGIEnv, k)
-		}
-		st = nil
-	}()
 
 	if !ok {
 		w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s%s\"", r.Host, h.RequestUserRealm()))
@@ -486,6 +470,7 @@ func (ses *session) SendAndRead(task *taskInfo, timeOut time.Duration) otasker.O
 			r = make(chan otasker.OracleTaskResult, 1)
 			t := taskTransport{*task, r}
 			ses.rcvChannels[task.taskID] = r
+
 			ses.srcChannel <- t
 		}
 		return r, false, 0
