@@ -288,15 +288,15 @@ func newHandler(srv *applicationServer, hType, hPath string) HttpHandler {
 		}
 	case "owa_apex":
 		{
-			return newSessionHandler(srv, otasker.NewOwaApexProcRunner())
+			return newSessionHandler(srv, otasker.ApexTasker)
 		}
 	case "owa_classic":
 		{
-			return newSessionHandler(srv, otasker.NewOwaClassicProcRunner())
+			return newSessionHandler(srv, otasker.ClassicTasker)
 		}
 	case "owa_ekb":
 		{
-			return newSessionHandler(srv, otasker.NewOwaEkbProcRunner())
+			return newSessionHandler(srv, otasker.EkbTasker)
 
 		}
 	}
