@@ -19,51 +19,6 @@ import (
 	"time"
 )
 
-<<<<<<< HEAD
-=======
-var numberOfSessions = metrics.NewInt("PersistentHandler_Number_Of_Sessions", "Server - Number of persistent sessions", "Pieces", "p")
-
-type taskInfo struct {
-	sessionID         string
-	taskID            string
-	reqUserName       string
-	reqUserPass       string
-	reqConnStr        string
-	reqParamStoreProc string
-	reqBeforeScript   string
-	reqAfterScript    string
-	reqDocumentTable  string
-	reqCGIEnv         map[string]string
-	reqProc           string
-	reqParams         url.Values
-	reqFiles          *otasker.Form
-}
-
-type taskTransport struct {
-	task       taskInfo
-	rcvChannel chan otasker.OracleTaskResult
-}
-
-type session struct {
-	sync.Mutex
-	tasker          otasker.OracleTasker
-	sessionID       string
-	srcChannel      chan taskTransport
-	rcvChannels     map[string]chan otasker.OracleTaskResult
-	currTaskID      string
-	currTaskStarted time.Time
-}
-
-type sessionHandlerUser struct {
-	isSpecial bool
-	connStr   string
-}
-
-var usersFree = sync.Pool{
-	New: func() interface{} { return new(sessionHandlerUser) },
-}
-
->>>>>>> master
 type sessionHandlerParams struct {
 	sessionIdleTimeout int
 	sessionWaitTimeout int
