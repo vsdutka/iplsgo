@@ -34,7 +34,7 @@ func NewConfig(
 		serviceName, serviceDispName string,
 		httpPort, httpDebugPort, httpReadTimeout, httpWriteTimeout int,
 		httpSsl bool, httpSslCert, httpSslKey,
-		httpLogDir string,
+		httpLogDir string, httpUsers []byte,
 		handlersParams []json.RawMessage) error,
 ) *Config {
 
@@ -203,7 +203,7 @@ func parseConfig(
 		serviceName, serviceDispName string,
 		httpPort, httpDebugPort, httpReadTimeout, httpWriteTimeout int,
 		httpSsl bool, httpSslCert, httpSslKey,
-		httpLogDir string,
+		httpLogDir string, httpUsers []byte,
 		handlersParams []json.RawMessage) error,
 ) error {
 	type _t struct {
@@ -217,6 +217,7 @@ func parseConfig(
 		HTTPSslCert      string            `json:"Http.SSLCert"`
 		HTTPSslKey       string            `json:"Http.SSLKey"`
 		HTTPLogDir       string            `json:"Http.LogDir"`
+		HTTPUsers        json.RawMessage   `json:"Http.Users"`
 		List             []json.RawMessage `json:"Http.Handlers"`
 	}
 	var appServerConfig _t = _t{
@@ -246,6 +247,7 @@ func parseConfig(
 		appServerConfig.HTTPSslCert,
 		appServerConfig.HTTPSslKey,
 		appServerConfig.HTTPLogDir,
+		appServerConfig.HTTPUsers,
 		appServerConfig.List,
 	)
 }

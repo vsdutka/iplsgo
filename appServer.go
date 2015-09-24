@@ -218,9 +218,10 @@ func (s *applicationServer) setServerConfig(
 	serviceName, serviceDispName string,
 	httpPort, httpDebugPort, httpReadTimeout, httpWriteTimeout int,
 	httpSsl bool, httpSslCert, httpSslKey,
-	httpLogDir string,
+	httpLogDir string, httpUsers []byte,
 	handlersConfig []json.RawMessage,
 ) error {
+
 	if !s.configReaded {
 		// Параметры HTTP сервера можно устанавливать только при старте сервера
 		func() {
@@ -238,6 +239,7 @@ func (s *applicationServer) setServerConfig(
 			s.httpLogDir = httpLogDir
 		}()
 	}
+	UpdateUsers(&httpUsers)
 	type _t struct {
 		Path   string `json:"Path"`
 		Type   string `json:"Type"`
@@ -286,15 +288,15 @@ func newHandler(srv *applicationServer, hType, hPath string) HttpHandler {
 		}
 	case "owa_apex":
 		{
-			return newSessionHandler(srv, otasker.NewOwaApexProcRunner())
+			return newSessionHandler(srv, otasker.ApexTasker)
 		}
 	case "owa_classic":
 		{
-			return newSessionHandler(srv, otasker.NewOwaClassicProcRunner())
+			return newSessionHandler(srv, otasker.ClassicTasker)
 		}
 	case "owa_ekb":
 		{
-			return newSessionHandler(srv, otasker.NewOwaEkbProcRunner())
+			return newSessionHandler(srv, otasker.EkbTasker)
 
 		}
 	}

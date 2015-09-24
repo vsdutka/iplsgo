@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/vsdutka/metrics"
 	"github.com/vsdutka/nspercent-encoding"
 	"github.com/vsdutka/otasker"
 	"html/template"
@@ -14,54 +13,11 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
-
-var numberOfSessions = metrics.NewInt("PersistentHandler_Number_Of_Sessions", "Server - Number of persistent sessions", "Pieces", "p")
-
-type taskInfo struct {
-	sessionID         string
-	taskID            string
-	reqUserName       string
-	reqUserPass       string
-	reqConnStr        string
-	reqParamStoreProc string
-	reqBeforeScript   string
-	reqAfterScript    string
-	reqDocumentTable  string
-	reqCGIEnv         map[string]string
-	reqProc           string
-	reqParams         url.Values
-	reqFiles          *otasker.Form
-}
-
-type taskTransport struct {
-	task       taskInfo
-	rcvChannel chan otasker.OracleTaskResult
-}
-
-type session struct {
-	sync.Mutex
-	tasker          otasker.OracleTasker
-	sessionID       string
-	srcChannel      chan taskTransport
-	rcvChannels     map[string]chan otasker.OracleTaskResult
-	currTaskID      string
-	currTaskStarted time.Time
-}
-
-type sessionHandlerUser struct {
-	isSpecial bool
-	connStr   string
-}
-
-var usersFree = sync.Pool{
-	New: func() interface{} { return new(sessionHandlerUser) },
-}
 
 type sessionHandlerParams struct {
 	sessionIdleTimeout int
@@ -75,36 +31,32 @@ type sessionHandlerParams struct {
 	paramStoreProc     string
 	documentTable      string
 	templates          map[string]string
-	users              map[string]*sessionHandlerUser
+	grps               map[int32]string
+	typeTasker         int
 }
 
 type sessionHandler struct {
 	srv *applicationServer
 	// Конфигурационные параметры
-	params           sessionHandlerParams
-	paramsMutex      sync.RWMutex
-	sessionList      map[string]*session
-	sessionListMutex sync.Mutex
-	taskerCreator    func() otasker.OracleTasker
+	params      sessionHandlerParams
+	paramsMutex sync.RWMutex
 }
 
-func newSessionHandler(srv *applicationServer, fn func() otasker.OracleTasker) *sessionHandler {
+func newSessionHandler(srv *applicationServer, typeTasker int) *sessionHandler {
 	h := &sessionHandler{srv: srv,
 		params: sessionHandlerParams{
-			templates: make(map[string]string),
-			users:     make(map[string]*sessionHandlerUser),
+			templates:  make(map[string]string),
+			grps:       make(map[int32]string),
+			typeTasker: typeTasker,
 		},
-		sessionList:   make(map[string]*session),
-		taskerCreator: fn,
 	}
 	return h
 }
 
 func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
-	type _tUser struct {
-		Name      string
-		IsSpecial bool
-		SID       string
+	type _tGrp struct {
+		ID  int32
+		SID string
 	}
 	type _tTemplate struct {
 		Code string
@@ -122,7 +74,8 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 		ParamStoreProc     string       `json:"owa.ParamStroreProc"`
 		DocumentTable      string       `json:"owa.DocumentTable"`
 		Templates          []_tTemplate `json:"owa.Templates"`
-		Users              []_tUser     `json:"owa.Users"`
+		//		Users              []_tUser     `json:"owa.Users"`
+		Grps []_tGrp `json:"owa.UserGroups"`
 	}
 	t := _t{}
 	if err := json.Unmarshal(*conf, &t); err != nil {
@@ -150,22 +103,10 @@ func (h *sessionHandler) SetConfig(conf *json.RawMessage) {
 			for k, _ := range t.Templates {
 				h.params.templates[t.Templates[k].Code] = t.Templates[k].Body
 			}
-			for k, _ := range h.params.users {
-				usersFree.Put(h.params.users[k])
-				delete(h.params.users, k)
-			}
-			for k, _ := range t.Users {
-				u, ok := usersFree.Get().(*sessionHandlerUser)
-				if !ok {
-					u = &sessionHandlerUser{
-						isSpecial: t.Users[k].IsSpecial,
-						connStr:   t.Users[k].SID,
-					}
-				} else {
-					u.isSpecial = t.Users[k].IsSpecial
-					u.connStr = t.Users[k].SID
-				}
-				h.params.users[strings.ToUpper(t.Users[k].Name)] = u
+
+			h.params.grps = make(map[int32]string)
+			for k, _ := range t.Grps {
+				h.params.grps[t.Grps[k].ID] = t.Grps[k].SID
 			}
 		}()
 	}
@@ -177,13 +118,10 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	r.URL.RawQuery = NSPercentEncoding.FixNonStandardPercentEncoding(r.URL.RawQuery)
 
-	st, ok := h.createTaskInfo(r)
-	defer func() {
-		for k := range st.reqCGIEnv {
-			delete(st.reqCGIEnv, k)
-		}
-		st = nil
-	}()
+	vpath, typeTasker, sessionID, taskID, userName, userPass, connStr,
+		paramStoreProc, beforeScript, afterScript, documentTable,
+		cgiEnv, procName, procParams, reqFiles,
+		waitTimeout, idleTimeout, dumpFileName, ok := h.createTaskInfo(r)
 
 	if !ok {
 		w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s%s\"", r.Host, h.RequestUserRealm()))
@@ -192,28 +130,9 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ses := func() *session {
-		h.sessionListMutex.Lock()
-		defer h.sessionListMutex.Unlock()
-
-		ses, found := h.sessionList[st.sessionID]
-		if !found {
-			ses = &session{}
-			ses.sessionID = st.sessionID
-			ses.srcChannel = make(chan taskTransport, 10)
-			ses.rcvChannels = make(map[string]chan otasker.OracleTaskResult)
-			ses.tasker = h.taskerCreator()
-			go ses.Listen(h, st.sessionID, h.SessionIdleTimeout())
-			h.sessionList[st.sessionID] = ses
-			numberOfSessions.Add(1)
-		}
-		return ses
-	}()
-
-	_, p := filepath.Split(path.Clean(r.URL.Path))
-	if p == "break_session" {
+	if procName == "break_session" {
 		//FIXME
-		if err := ses.tasker.Break(); err != nil {
+		if err := otasker.Break(vpath, sessionID); err != nil {
 			h.responseError(w, err.Error())
 		} else {
 			h.responseFixedPage(w, "rbreakr", nil)
@@ -221,7 +140,10 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := ses.SendAndRead(st, h.SessionWaitTimeout())
+	res := otasker.Run(vpath, typeTasker, sessionID, taskID, userName, userPass, connStr,
+		paramStoreProc, beforeScript, afterScript, documentTable,
+		cgiEnv, procName, procParams, reqFiles,
+		waitTimeout, idleTimeout, dumpFileName)
 
 	switch res.StatusCode {
 	case otasker.StatusErrorPage:
@@ -230,7 +152,7 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	case otasker.StatusWaitPage:
 		{
-			s := makeWaitForm(r, st.taskID)
+			s := makeWaitForm(r, taskID)
 
 			type DataInfo struct {
 				UserName string
@@ -238,11 +160,11 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Duration int64
 			}
 
-			h.responseFixedPage(w, "rwait", DataInfo{st.reqUserName, template.HTML(s), res.Duration})
+			h.responseFixedPage(w, "rwait", DataInfo{userName, template.HTML(s), res.Duration})
 		}
 	case otasker.StatusBreakPage:
 		{
-			s := makeWaitForm(r, st.taskID)
+			s := makeWaitForm(r, taskID)
 
 			type DataInfo struct {
 				UserName string
@@ -250,7 +172,7 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Duration int64
 			}
 
-			h.responseFixedPage(w, "rbreak", DataInfo{st.reqUserName, template.HTML(s), res.Duration})
+			h.responseFixedPage(w, "rbreak", DataInfo{userName, template.HTML(s), res.Duration})
 		}
 	case otasker.StatusRequestWasInterrupted:
 		{
@@ -319,283 +241,114 @@ func (h *sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *sessionHandler) removeSessionHandler(sessionID string) {
-	h.sessionListMutex.Lock()
-	defer h.sessionListMutex.Unlock()
-	ses := h.sessionList[sessionID]
-	delete(h.sessionList, sessionID)
-	ses.Close()
-	numberOfSessions.Add(-1)
-}
+func (h *sessionHandler) createTaskInfo(r *http.Request) (
+	vpath string,
+	typeTasker int,
+	sessionID,
+	taskID,
+	userName,
+	userPass,
+	connStr,
+	paramStoreProc,
+	beforeScript,
+	afterScript,
+	documentTable string,
+	cgiEnv map[string]string,
+	procName string,
+	procParams url.Values,
+	reqFiles *otasker.Form,
 
-func (h *sessionHandler) createTaskInfo(r *http.Request) (*taskInfo, bool) {
-	ok := true
-	st := &taskInfo{}
-	st.reqUserName, st.reqUserPass, ok = r.BasicAuth()
+	waitTimeout,
+	idleTimeout time.Duration,
+	dumpFileName string,
+	ok bool,
+) {
+	ok = true
+	//Фиксированные параметры
+	h.paramsMutex.RLock()
 
-	remoteUser := st.reqUserName
+	typeTasker = h.params.typeTasker
+	documentTable = h.params.documentTable
+	paramStoreProc = h.params.paramStoreProc
+	beforeScript = h.params.beforeScript
+	afterScript = h.params.afterScript
+	requestUserInfo := h.params.requestUserInfo
+	defUserName := h.params.defUserName
+	defUserPass := h.params.defUserPass
+	requestUserRealm := h.params.requestUserRealm
+	waitTimeout = time.Duration(h.params.sessionWaitTimeout) * time.Millisecond
+	idleTimeout = time.Duration(h.params.sessionIdleTimeout) * time.Millisecond
+
+	h.paramsMutex.RUnlock()
+
+	vpath, procName = filepath.Split(path.Clean(r.URL.Path))
+
+	userName, userPass, ok = r.BasicAuth()
+
+	remoteUser := userName
 	if remoteUser == "" {
 		remoteUser = "-"
 	}
 
-	if !ok {
-		if !h.RequestUserInfo() {
-			// Авторизация от клиента не требуется.
-			// Используем значения по умолчанию
-			st.reqUserName = h.DefUserName()
-			st.reqUserPass = h.DefUserPass()
-		} else {
-			return st, false
-		}
+	if !requestUserInfo {
+		// Авторизация от клиента не требуется.
+		// Используем значения по умолчанию
+		userName = defUserName
+		userPass = defUserPass
 	} else {
-		if !h.RequestUserInfo() {
-			// Авторизация от клиента не требуется.
-			// Используем значения по умолчанию
-			st.reqUserName = h.DefUserName()
-			st.reqUserPass = h.DefUserPass()
-		}
-	}
-	st.reqFiles, _ = otasker.ParseMultipartFormEx(r, 64<<20)
-
-	isSpecial, connStr := h.userInfo(st.reqUserName)
-	if connStr == "" {
-		return st, false
-	}
-	st.sessionID = makeHandlerID(isSpecial, st.reqUserName, st.reqUserPass, r.Header.Get("DebugIP"), r)
-	st.taskID = makeTaskID(r)
-	st.reqConnStr = connStr
-	st.reqDocumentTable = h.DocumentTable()
-	st.reqParamStoreProc = h.ParamStoreProc()
-	st.reqBeforeScript = h.BeforeScript()
-	st.reqAfterScript = h.AfterScript()
-	st.reqCGIEnv = makeEnvParams(r, st.reqDocumentTable, remoteUser, h.RequestUserRealm()+"/")
-
-	st.reqParams = r.Form
-
-	_, st.reqProc = filepath.Split(path.Clean(r.URL.Path))
-	return st, true
-}
-
-func (ses *session) Listen(h *sessionHandler, sessionID string, idleTimeout time.Duration) {
-	defer h.removeSessionHandler(sessionID)
-	for {
-		select {
-		case transport := <-ses.srcChannel:
-			{
-				res := func() otasker.OracleTaskResult {
-					ses.setCurrentTaskID(transport.task.taskID)
-					defer func() {
-						ses.setCurrentTaskID("")
-					}()
-
-					return ses.tasker.Run(transport.task.sessionID,
-						transport.task.taskID,
-						transport.task.reqUserName,
-						transport.task.reqUserPass,
-						transport.task.reqConnStr,
-						transport.task.reqParamStoreProc,
-						transport.task.reqBeforeScript,
-						transport.task.reqAfterScript,
-						transport.task.reqDocumentTable,
-						transport.task.reqCGIEnv,
-						transport.task.reqProc,
-						transport.task.reqParams,
-						transport.task.reqFiles,
-						srv.expandFileName(fmt.Sprintf("${log_dir}\\err_%s_${datetime}.log", transport.task.reqUserName)))
-				}()
-				transport.rcvChannel <- res
-				if res.StatusCode == otasker.StatusRequestWasInterrupted {
-					return
-				}
-			}
-		case <-time.After(idleTimeout):
-			{
-				return
-			}
-		}
-	}
-}
-
-func (ses *session) getCurrentTaskInfo() (string, time.Time) {
-	ses.Lock()
-	defer ses.Unlock()
-	return ses.currTaskID, ses.currTaskStarted
-}
-
-func (ses *session) setCurrentTaskID(taskID string) {
-	ses.Lock()
-	defer ses.Unlock()
-	if taskID == "" {
-		ses.currTaskStarted = time.Time{}
-	} else {
-		ses.currTaskStarted = time.Now()
-	}
-	ses.currTaskID = taskID
-}
-
-//func (ses *session) send(task *taskInfo) chan otasker.OracleTaskResult {
-//	ses.Lock()
-//	defer ses.Unlock()
-
-//	r, ok := ses.rcvChannels[task.taskID]
-//	if !ok {
-//		// Канал делаем буферизованным. Если даже никто не ждет получения ответа,
-//		// все равно произойдет выход из Listen
-//		r = make(chan otasker.OracleTaskResult, 1)
-//		t := taskTransport{*task, r}
-//		ses.rcvChannels[task.taskID] = r
-//		ses.srcChannel <- t
-//	}
-
-//	return r
-//}
-
-func (ses *session) SendAndRead(task *taskInfo, timeOut time.Duration) otasker.OracleTaskResult {
-	//r := ses.send(task)
-	r, busy, busySeconds := func() (chan otasker.OracleTaskResult, bool, int64) {
-		ses.Lock()
-		defer ses.Unlock()
-
-		r, ok := ses.rcvChannels[task.taskID]
 		if !ok {
-			// Если длина канала > 0, то значит что-то уже отправили на выполнение
-			// и это не то же, что отправляют сейчас.
-			// Значит, какал занят
-			if len(ses.srcChannel) > 0 {
-				return nil, true, 0
-			}
-			//Обращаемся к защищенным переменным на прямую, поскольку уже внутри блока ses.Lock
-			if (ses.currTaskID != "") && (ses.currTaskID != task.taskID) {
-				return nil, true, int64(time.Since(ses.currTaskStarted) / time.Second)
-			}
-			// Канал делаем буферизованным. Если даже никто не ждет получения ответа,
-			// все равно произойдет выход из Listen
-			r = make(chan otasker.OracleTaskResult, 1)
-			t := taskTransport{*task, r}
-			ses.rcvChannels[task.taskID] = r
-			ses.srcChannel <- t
+			return vpath, typeTasker, sessionID, taskID, userName, userPass, connStr,
+				paramStoreProc, beforeScript, afterScript, documentTable, cgiEnv,
+				procName, procParams, reqFiles,
+				waitTimeout, idleTimeout, dumpFileName,
+				false
 		}
-		return r, false, 0
-	}()
-	if busy {
-		return otasker.OracleTaskResult{StatusCode: otasker.StatusBreakPage, Duration: busySeconds}
 	}
-	for {
-		select {
-		case res := <-r:
-			{
-				// Дождались результатов. Отдаем клиенту
+	dumpFileName = srv.expandFileName(fmt.Sprintf("${log_dir}\\err_%s_${datetime}.log", userName))
 
-				// Удаляем из списка каналов для получения результатов ранее отправленных запросов
-				func() {
-					ses.Lock()
-					defer ses.Unlock()
-					delete(ses.rcvChannels, task.taskID)
-				}()
-				return res
-			}
-		case <-time.After(timeOut):
-			{
-				taskID, taskSarted := ses.getCurrentTaskInfo()
-				if taskID == task.taskID {
-					/* Сигнализируем о том, что идет выполнение этого запроса и нужно показать червяка */
-					return otasker.OracleTaskResult{StatusCode: otasker.StatusWaitPage, Duration: int64(time.Since(taskSarted) / time.Second)}
-				}
-				/* Сигнализируем о том, что идет выполнение этого запроса и нужно показать червяка */
-				return otasker.OracleTaskResult{StatusCode: otasker.StatusBreakPage, Duration: int64(time.Since(taskSarted) / time.Second)}
-			}
-		}
+	reqFiles, _ = otasker.ParseMultipartFormEx(r, 64<<20)
+
+	var isSpecial bool
+	isSpecial, connStr = h.userInfo(userName)
+	if connStr == "" {
+		return vpath, typeTasker, sessionID, taskID, userName, userPass, connStr,
+			paramStoreProc, beforeScript, afterScript, documentTable, cgiEnv,
+			procName, procParams, reqFiles,
+			waitTimeout, idleTimeout, dumpFileName,
+			false
 	}
+
+	sessionID = makeHandlerID(isSpecial, userName, userPass, r.Header.Get("DebugIP"), r)
+	taskID = makeTaskID(r)
+
+	cgiEnv = makeEnvParams(r, documentTable, remoteUser, requestUserRealm+"/")
+
+	procParams = r.Form
+
+	return vpath, typeTasker, sessionID, taskID, userName, userPass, connStr,
+		paramStoreProc, beforeScript, afterScript, documentTable, cgiEnv,
+		procName, procParams, reqFiles,
+		waitTimeout, idleTimeout, dumpFileName,
+		true
 }
 
 func (h *sessionHandler) owaInternalHandler(rw http.ResponseWriter, r *http.Request) bool {
-	_, p := filepath.Split(path.Clean(r.URL.Path))
+	vpath, p := filepath.Split(path.Clean(r.URL.Path))
 	if p == "!" {
 		sortKeyName := r.FormValue("Sort")
-		s := func() struct{ Sessions otasker.OracleTaskInfos } {
-			h.sessionListMutex.Lock()
-			defer h.sessionListMutex.Unlock()
-			res := struct {
-				Sessions otasker.OracleTaskInfos
-			}{make(otasker.OracleTaskInfos, 0)}
-
-			for _, val := range h.sessionList {
-				res.Sessions = append(res.Sessions, val.tasker.Info(sortKeyName))
-			}
-			return res
-		}()
-
-		sort.Sort(s.Sessions)
-
-		h.responseFixedPage(rw, "sessions", s)
+		h.responseFixedPage(rw, "sessions", struct {
+			Sessions otasker.OracleTaskersStats
+		}{otasker.Collect(vpath, sortKeyName, false)})
 
 		return true
 	}
 	return false
 }
 
-func (ses *session) Close() {
-	ses.Lock()
-	defer ses.Unlock()
-	close(ses.srcChannel)
-	for _, v := range ses.rcvChannels {
-		close(v)
-	}
-	if ses.tasker != nil {
-		// Очистку объекта делаем асинхронной, поскольку она ждет закрытия курсоров
-		go ses.tasker.CloseAndFree()
-		ses.tasker = nil
-	}
-}
-func (h *sessionHandler) SessionIdleTimeout() time.Duration {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	return time.Duration(h.params.sessionIdleTimeout) * time.Millisecond
-}
-func (h *sessionHandler) SessionWaitTimeout() time.Duration {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	return time.Duration(h.params.sessionWaitTimeout) * time.Millisecond
-}
-func (h *sessionHandler) RequestUserInfo() bool {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	return h.params.requestUserInfo
-}
 func (h *sessionHandler) RequestUserRealm() string {
 	h.paramsMutex.RLock()
 	defer h.paramsMutex.RUnlock()
 	return h.params.requestUserRealm
-}
-func (h *sessionHandler) DefUserName() string {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	return h.params.defUserName
-}
-func (h *sessionHandler) DefUserPass() string {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	return h.params.defUserPass
-}
-func (h *sessionHandler) BeforeScript() string {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	return h.params.beforeScript
-}
-func (h *sessionHandler) AfterScript() string {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	return h.params.afterScript
-}
-func (h *sessionHandler) ParamStoreProc() string {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	return h.params.paramStoreProc
-}
-func (h *sessionHandler) DocumentTable() string {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	return h.params.documentTable
 }
 
 func (h *sessionHandler) templateBody(templateName string) (string, bool) {
@@ -673,14 +426,23 @@ func (h *sessionHandler) responseFixedPage(res http.ResponseWriter, pageName str
 	//	}
 }
 
-func (h *sessionHandler) userInfo(user string) (isSpecial bool, connStr string) {
-	h.paramsMutex.RLock()
-	defer h.paramsMutex.RUnlock()
-	u, ok := h.params.users[strings.ToUpper(user)]
+func (h *sessionHandler) userInfo(user string) (bool, string) {
+	if user == "" {
+		return false, ""
+	}
+	isSpecial, grpId, ok := GetUserInfo(user)
 	if !ok {
 		return false, ""
 	}
-	return u.isSpecial, u.connStr
+	h.paramsMutex.RLock()
+	defer h.paramsMutex.RUnlock()
+	//	u, ok := h.params.users[strings.ToUpper(user)]
+
+	if sid, ok := h.params.grps[grpId]; !ok {
+		return false, ""
+	} else {
+		return isSpecial, sid
+	}
 }
 
 const (

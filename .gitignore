@@ -48,3 +48,4 @@ log/iPLSGo_10111/ops.json
 *.gob
 *.out
 *.pprof
+*.rar
