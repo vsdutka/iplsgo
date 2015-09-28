@@ -27,7 +27,7 @@ func HttpFileServer(path, root string) HttpHandler {
 }
 
 func (f *httpFileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	upath := r.URL.Path
+	upath := strings.ToLower(r.URL.Path)
 	if !strings.HasPrefix(upath, "/") {
 		upath = "/" + upath
 		r.URL.Path = upath
@@ -35,7 +35,7 @@ func (f *httpFileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p, root := func() (string, string) {
 		f.mu.RLock()
 		defer f.mu.RUnlock()
-		return f.path, f.root
+		return strings.ToLower(f.path), f.root
 	}()
 	upath = strings.TrimPrefix(upath, p)
 	http.ServeFile(w, r, path.Clean(root+upath))

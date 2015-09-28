@@ -69,6 +69,8 @@ func cleanPath(p string) string {
 // Find a handler on a handler map given a path string
 // Most-specific (longest) pattern wins
 func (mux *HttpServeMux) match(path string) (h HttpHandler, pattern string) {
+	path = strings.ToLower(path)
+
 	var n = 0
 	for _, v := range mux.keys {
 		if !pathMatch(v, path) {
@@ -147,6 +149,8 @@ func (mux *HttpServeMux) Handle(pattern string, handler HttpHandler) {
 	mux.mu.Lock()
 	defer mux.mu.Unlock()
 
+	pattern = strings.ToLower(pattern)
+
 	if pattern == "" {
 		panic("http: invalid pattern " + pattern)
 	}
@@ -189,6 +193,8 @@ func (mux *HttpServeMux) Delete(pattern string) {
 	mux.mu.Lock()
 	defer mux.mu.Unlock()
 
+	pattern = strings.ToLower(pattern)
+
 	if pattern == "" {
 		panic("http: invalid pattern " + pattern)
 	}
@@ -229,6 +235,8 @@ func (mux *HttpServeMux) Delete(pattern string) {
 func (mux *HttpServeMux) GetHandler(pattern string) (HttpHandler, bool) {
 	mux.mu.RLock()
 	defer mux.mu.RUnlock()
+
+	pattern = strings.ToLower(pattern)
 
 	if pattern == "" {
 		return nil, false
