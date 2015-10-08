@@ -17,8 +17,6 @@ import (
 var (
 	logger              service.Logger
 	loggerLock          sync.Mutex
-	srv                 *applicationServer
-	srvConfig           *Config
 	svcFlag             *string
 	dsnFlag             *string
 	confNameFlag        *string
@@ -50,9 +48,9 @@ type program struct {
 
 func (p *program) Start(s service.Service) error {
 	if service.Interactive() {
-		logInfof("Service \"%s\" is running in terminal.", srv.ServiceDispName())
+		logInfof("Service \"%s\" is running in terminal.", confServiceDispName)
 	} else {
-		logInfof("Service \"%s\" is running under service manager.", srv.ServiceDispName())
+		logInfof("Service \"%s\" is running under service manager.", confServiceDispName)
 	}
 	p.exit = make(chan struct{})
 
@@ -61,9 +59,8 @@ func (p *program) Start(s service.Service) error {
 	return nil
 }
 func (p *program) run() {
-	srv.Start()
-	logInfof("Service \"%s\" is started.", srv.ServiceDispName())
-
+	startServer()
+	logInfof("Service \"%s\" is started.", confServiceDispName)
 	for {
 		select {
 		case <-p.exit:
@@ -73,10 +70,10 @@ func (p *program) run() {
 }
 func (p *program) Stop(s service.Service) error {
 	// Any work in Stop should be quick, usually a few seconds at most.
-	logInfof("Service \"%s\" is stopping.", srv.ServiceDispName())
-	srvConfig.Stop()
-	srv.Stop()
-	logInfof("Service \"%s\" is stopped.", srv.ServiceDispName())
+	logInfof("Service \"%s\" is stopping.", confServiceDispName)
+	stopReading()
+	stopServer()
+	logInfof("Service \"%s\" is stopped.", confServiceDispName)
 	close(p.exit)
 	return nil
 }
@@ -109,14 +106,15 @@ func main() {
 
 	//	defer profile.Start(&cfg).Stop()
 
-	srv = newApplicationServer()
-	//srv.Load()
-	srvConfig = NewConfig(*dsnFlag, *confNameFlag, (time.Duration)(*confReadTimeoutFlag)*time.Second, srv.setServerConfig)
+	err := startReading(*dsnFlag, *confNameFlag, (time.Duration)(*confReadTimeoutFlag)*time.Second)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	svcConfig := &service.Config{
-		Name:        srv.ServiceName(),
-		DisplayName: srv.ServiceDispName(),
-		Description: srv.ServiceDispName(),
+		Name:        confServiceName,
+		DisplayName: confServiceDispName,
+		Description: confServiceDispName,
 		Arguments:   []string{fmt.Sprintf("-dsn=%s", *dsnFlag), fmt.Sprintf("-conf=%s", *confNameFlag), fmt.Sprintf("-conf_tm=%v", *confReadTimeoutFlag)},
 	}
 

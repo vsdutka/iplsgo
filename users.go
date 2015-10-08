@@ -23,9 +23,9 @@ func GetUserInfo(name string) (bool, int32, bool) {
 	return u.isSpecial, u.grpId, true
 }
 
-func UpdateUsers(users *[]byte) {
+func UpdateUsers(users []byte) {
 	ulock.RLock()
-	needToParse := !bytes.Equal(prev, *users)
+	needToParse := !bytes.Equal(prev, users)
 	ulock.RUnlock()
 
 	if needToParse {
@@ -33,11 +33,15 @@ func UpdateUsers(users *[]byte) {
 			ulock.Lock()
 			defer ulock.Unlock()
 
-			copy(prev, *users)
+			copy(prev, users)
 
 			for k, _ := range ulist {
 				usersFree.Put(ulist[k])
 				delete(ulist, k)
+			}
+
+			if len(users) == 0 {
+				return
 			}
 
 			type _tUser struct {
@@ -45,10 +49,9 @@ func UpdateUsers(users *[]byte) {
 				IsSpecial bool
 				GRP_ID    int32
 			}
-			t := make([]_tUser, 0)
-			if err := json.Unmarshal(*users, &t); err != nil {
+			var t = []_tUser{}
+			if err := json.Unmarshal(users, &t); err != nil {
 				logError(err)
-			} else {
 			}
 
 			for k, _ := range t {

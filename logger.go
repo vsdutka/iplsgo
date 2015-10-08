@@ -1,4 +1,4 @@
-// httpLogger
+// logger
 package main
 
 import (
@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -32,7 +33,7 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 }
 
 // WriteLog Logs the Http Status for a request into fileHandler and returns a httphandler function which is a wrapper to log the requests.
-func WriteLog(handle http.Handler, s *applicationServer) http.HandlerFunc {
+func WriteLog(handle http.Handler) http.HandlerFunc {
 	logChan := make(chan string, 10000)
 	go func() {
 		const fmtFileName = "${log_dir}\\ex${date}.log"
@@ -55,8 +56,10 @@ func WriteLog(handle http.Handler, s *applicationServer) http.HandlerFunc {
 						if logFile != nil {
 							logFile.Close()
 						}
-						fileName := s.expandFileName(fmtFileName)
-						s.checkDirExists(fileName)
+						fileName := expandFileName(fmtFileName)
+						dir, _ := filepath.Split(fileName)
+						os.MkdirAll(dir, os.ModeDir)
+
 						logFile, err = os.OpenFile(fileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 						if err != nil {
 							log.Fatalln(err)

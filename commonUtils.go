@@ -4,29 +4,12 @@ package main
 import (
 	"code.google.com/p/go-uuid/uuid"
 	"github.com/vsdutka/otasker"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 )
 
-func writeToFile(fileName string, data []byte) error {
-	f, err := os.OpenFile(fileName, os.O_RDWR|os.O_APPEND, 0666)
-	if err != nil {
-		f, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	}
-	n, err := f.Write(data)
-	if err == nil && n < len(data) {
-		err = io.ErrShortWrite
-	}
-	if err1 := f.Close(); err == nil {
-		err = err1
-	}
-	return err
-
-}
 func makeHandlerID(isSpecial bool, userName, userPass, debugIP string, req *http.Request) string {
 	addr := ""
 	if isSpecial {
