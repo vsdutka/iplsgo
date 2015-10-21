@@ -54,7 +54,7 @@ func startReading(dsn, configName string, timeout time.Duration) error {
 	}
 	go func(timeout time.Duration) {
 		var (
-			prevBuf []byte = buf[:len(buf)]
+			prevBuf = buf[:len(buf)]
 		)
 		defer func() {
 			if conn != nil {
@@ -149,7 +149,7 @@ func readConfig() ([]byte, error) {
 	cur = conn.NewCursor()
 	defer cur.Close()
 
-	if err = cur.Execute(stm_read_config, []interface{}{configname, hostname}, nil); err != nil {
+	if err = cur.Execute(stmReadConfig, []interface{}{configname, hostname}, nil); err != nil {
 		return nil, errgo.Newf("error executing `c.config`: %s", otasker.UnMask(err))
 	}
 	row, err := cur.FetchOne()
@@ -181,4 +181,4 @@ func readConfig() ([]byte, error) {
 	return nil, errgo.New("data not available")
 }
 
-const stm_read_config = `select c.config(:1, :2)from dual`
+const stmReadConfig = `select c.config(:1, :2)from dual`

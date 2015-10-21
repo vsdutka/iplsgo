@@ -2,7 +2,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/vsdutka/metrics"
 	"log"
 	"net/http"
@@ -32,13 +31,13 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
-// WriteLog Logs the Http Status for a request into fileHandler and returns a httphandler function which is a wrapper to log the requests.
-func WriteLog(handle http.Handler) http.HandlerFunc {
-	logChan := make(chan string, 10000)
+var logChan = make(chan string, 10000)
+
+func init() {
 	go func() {
 		const fmtFileName = "${log_dir}\\ex${date}.log"
 		var (
-			lastLogging time.Time = time.Time{}
+			lastLogging = time.Time{}
 			logFile     *os.File
 			err         error
 			str         string
@@ -71,42 +70,4 @@ func WriteLog(handle http.Handler) http.HandlerFunc {
 			}
 		}
 	}()
-	return func(w http.ResponseWriter, request *http.Request) {
-		countOfRequests.Add(1)
-		defer countOfRequests.Add(-1)
-
-		start := time.Now()
-		writer := statusWriter{w, 0, 0}
-		handle.ServeHTTP(&writer, request)
-		end := time.Now()
-		latency := end.Sub(start)
-		statusCode := writer.status
-		length := writer.length
-		user, _, ok := request.BasicAuth()
-		if !ok {
-			user = "-"
-		}
-		url := request.RequestURI
-
-		params := request.Form.Encode()
-		if params != "" {
-			url = url + "?" + params
-		}
-
-		logChan <- fmt.Sprintf("%s, %s, %s, %s, %s, %s, %d, %d, %d, %d, %s, %s, %v\n",
-			request.RemoteAddr,
-			user,
-			end.Format("2006.01.02"),
-			end.Format("15:04:05.000000000"),
-			request.Proto,
-			request.Host,
-			length,
-			request.ContentLength,
-			time.Since(start)/time.Millisecond,
-			statusCode,
-			request.Method,
-			url,
-			latency,
-		)
-	}
 }

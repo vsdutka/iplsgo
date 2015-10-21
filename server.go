@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/net/html/charset"
 	//"github.com/gorilla/mux"
 	"github.com/julienschmidt/httprouter"
 	"github.com/kardianos/osext"
@@ -80,7 +81,7 @@ func startServer() {
 					connCounter.Add(-1)
 				}
 			},
-			Handler: WriteLog(http.DefaultServeMux)}
+			Handler: http.DefaultServeMux}
 
 		if confHTTPSsl {
 			err := func() error {
@@ -147,7 +148,43 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return router
 	}()
 	r.URL.Path = strings.ToLower(r.URL.Path)
-	rt.ServeHTTP(w, r)
+
+	countOfRequests.Add(1)
+	defer countOfRequests.Add(-1)
+
+	start := time.Now()
+	writer := statusWriter{w, 0, 0}
+	rt.ServeHTTP(&writer, r)
+	end := time.Now()
+	latency := end.Sub(start)
+	statusCode := writer.status
+	length := writer.length
+	user, _, ok := r.BasicAuth()
+	if !ok {
+		user = "-"
+	}
+	url := r.RequestURI
+
+	params := r.Form.Encode()
+	if params != "" {
+		url = url + "?" + params
+	}
+
+	logChan <- fmt.Sprintf("%s, %s, %s, %s, %s, %s, %d, %d, %d, %d, %s, %s, %v\n",
+		r.RemoteAddr,
+		user,
+		end.Format("2006.01.02"),
+		end.Format("15:04:05.000000000"),
+		r.Proto,
+		r.Host,
+		length,
+		r.ContentLength,
+		time.Since(start)/time.Millisecond,
+		statusCode,
+		r.Method,
+		url,
+		latency,
+	)
 }
 
 func resetConfig() {
@@ -166,7 +203,7 @@ func resetConfig() {
 	confHTTPLogDir = ""
 	confServerReaded = false
 	// -- //
-	UpdateUsers(nil)
+	updateUsers(nil)
 	// -- //
 	router = httprouter.New()
 	prevConf = []byte{}
@@ -286,7 +323,7 @@ func parseConfig(buf []byte) error {
 
 		// -- //
 		if !confServerReaded {
-			confServiceName = c.ServiceName
+			confServiceName = fmt.Sprintf("%s_%d", c.ServiceName, c.HTTPPort)
 			confServiceDispName = c.ServiceDispName
 			confHTTPPort = c.HTTPPort
 			confHTTPDebugPort = c.HTTPDebugPort
@@ -299,7 +336,7 @@ func parseConfig(buf []byte) error {
 			confServerReaded = true
 		}
 		// -- //
-		UpdateUsers(c.HTTPUsers)
+		updateUsers(c.HTTPUsers)
 		// -- //
 		router = newRouter
 		// -- //
@@ -326,6 +363,8 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 		_, procName := filepath.Split(path.Clean(r.URL.Path))
 		vpath := pathStr
 
+		reqFiles, _ := otasker.ParseMultipartFormEx(r, 64<<20)
+
 		if procName == "!" {
 			sortKeyName := r.FormValue("Sort")
 			responseTemplate(w, "sessions", sessions, struct{ Sessions otasker.OracleTaskersStats }{
@@ -350,26 +389,24 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s%s\"", r.Host, requestUserRealm))
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte("Unauthorized"))
+				return
 			}
 		}
 		dumpFileName := expandFileName(fmt.Sprintf("${log_dir}\\err_%s_${datetime}.log", userName))
-
-		reqFiles, _ := otasker.ParseMultipartFormEx(r, 64<<20)
 
 		var isSpecial bool
 		isSpecial, connStr := func(user string) (bool, string) {
 			if user == "" {
 				return false, ""
 			}
-			isSpecial, grpId, ok := GetUserInfo(user)
+			isSpecial, grpID, ok := getUserInfo(user)
 			if !ok {
 				return false, ""
 			}
-			if sid, ok := grps[grpId]; !ok {
+			if sid, ok = grps[grpID]; !ok {
 				return false, ""
-			} else {
-				return isSpecial, sid
 			}
+			return isSpecial, sid
 		}(userName)
 		if connStr == "" {
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s%s\"", r.Host, requestUserRealm))
@@ -482,10 +519,23 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 					}
 				}
 				if res.ContentType != "" {
-					if mt, _, err := mime.ParseMediaType(res.ContentType); err == nil {
+					if mt, prms, err := mime.ParseMediaType(res.ContentType); err == nil {
 						// Поскольку буфер ВСЕГДА формируем в UTF-8,
 						// нужно изменить значение Charset в ContentType
-						res.ContentType = mt + "; charset=utf-8"
+						//res.ContentType = mt + "; charset=utf-8"
+						if cs, ok := prms["charset"]; ok {
+							resContent := make([]byte, len(res.Content))
+							e, _ := charset.Lookup(cs)
+							if e != nil {
+								_, _, err = e.NewEncoder().Transform(resContent, res.Content, true)
+								if err != nil {
+									panic(err)
+								}
+								res.Content = resContent
+							}
+						} else {
+							res.ContentType = mt + "; charset=utf-8"
+						}
 
 					}
 					w.Header().Set("Content-Type", res.ContentType)
