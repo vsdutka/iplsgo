@@ -6,7 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"golang.org/x/net/html/charset"
+	//"golang.org/x/net/html/charset"
 	//"github.com/gorilla/mux"
 	"github.com/julienschmidt/httprouter"
 	"github.com/kardianos/osext"
@@ -247,6 +247,9 @@ func parseConfig(buf []byte) error {
 				ID  int32
 				SID string
 			} `json:"owa.UserGroups"`
+			SoapUserName string `json:"soap.DBUserName"`
+			SoapUserPass string `json:"soap.DBUserPass"`
+			SoapConnStr  string `json:"soap.DBConnStr"`
 		} `json:"Http.Handlers"`
 	}
 	var c = _t{
@@ -313,6 +316,11 @@ func parseConfig(buf []byte) error {
 
 					newRouter.GET(upath+"/*proc", f)
 					newRouter.POST(upath+"/*proc", f)
+				}
+
+			case "SOAP":
+				{
+					newRouter.POST(upath+"/*proc", newSoap(upath, c.Handlers[k].SoapUserName, c.Handlers[k].SoapUserPass, c.Handlers[k].SoapConnStr))
 				}
 			}
 
@@ -519,26 +527,31 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 					}
 				}
 				if res.ContentType != "" {
-					if mt, prms, err := mime.ParseMediaType(res.ContentType); err == nil {
+					if mt, _ /*prms*/, err := mime.ParseMediaType(res.ContentType); err == nil {
 						// Поскольку буфер ВСЕГДА формируем в UTF-8,
 						// нужно изменить значение Charset в ContentType
-						//res.ContentType = mt + "; charset=utf-8"
-						if cs, ok := prms["charset"]; ok {
-							resContent := make([]byte, len(res.Content))
-							e, _ := charset.Lookup(cs)
-							if e != nil {
-								_, _, err = e.NewEncoder().Transform(resContent, res.Content, true)
-								if err != nil {
-									panic(err)
-								}
-								res.Content = resContent
-							}
-						} else {
-							res.ContentType = mt + "; charset=utf-8"
-						}
+						res.ContentType = mt + "; charset=utf-8"
+
+						//						if cs, ok := prms["charset"]; ok {
+						//							resContent := make([]byte, len(res.Content))
+						//							e, _ := charset.Lookup(cs)
+						//							if e != nil {
+						//								_, _, err = e.NewEncoder().Transform(resContent, res.Content, true)
+						//								if err != nil {
+						//									panic(err)
+						//								}
+						//								res.Content = resContent
+						//							}
+						//						} else {
+						//							res.ContentType = mt + "; charset=utf-8"
+						//						}
 
 					}
 					w.Header().Set("Content-Type", res.ContentType)
+				}
+				//FIXME - Убрать костыль после того. как принудительная установка будет удалена из кода на PL/SQL
+				for k := range bMeta {
+					res.Content = bytes.Replace(res.Content, bMeta[k], bMetaEmpty, -1)
 				}
 				w.WriteHeader(res.StatusCode)
 				w.Write(res.Content)
@@ -567,6 +580,14 @@ func expandFileName(fileName string) string {
 		}
 	})
 }
+
+var (
+	bMeta = [][]byte{
+		[]byte(`<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">`),
+		[]byte(`<meta http-equiv=Content-Type content="text/html; charset=windows-1251">`),
+	}
+	bMetaEmpty = []byte(``)
+)
 
 const (
 	sessions = `<HTML>

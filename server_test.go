@@ -4,7 +4,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	//"github.com/julienschmidt/httprouter"
+	"fmt"
+	"gopkg.in/errgo.v1"
+	"gopkg.in/goracle.v1/oracle"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,6 +15,25 @@ import (
 	"testing"
 	"time"
 )
+
+func exec(dsn, stm string) error {
+	if !(dsn != "") {
+		return errgo.New("cannot test connection without dsn!")
+	}
+	user, passw, sid := oracle.SplitDSN(dsn)
+	var err error
+	conn, err := oracle.NewConnection(user, passw, sid, false)
+	if err != nil {
+		return errgo.New("cannot create connection: " + err.Error())
+	}
+	if err = conn.Connect(0, false); err != nil {
+		return errgo.New("error connecting: " + err.Error())
+	}
+	defer conn.Close()
+	cur := conn.NewCursor()
+	defer cur.Close()
+	return cur.Execute(stm, nil, nil)
+}
 
 func performRequest(t *testing.T, method, username, password, urlStr, body, response string, responseCode int) {
 	req, _ := http.NewRequest(method, urlStr, bytes.NewReader([]byte(body)))
@@ -36,6 +57,21 @@ func performRequest(t *testing.T, method, username, password, urlStr, body, resp
 		t.Errorf("Method %s Response should be \"%s\", was \"%s\"", method, response, res)
 	}
 }
+
+const (
+	dsn          = "a/aaa111@DP-TST8"
+	stm_create_p = `
+create or replace procedure %s(ap in %s) is 
+begin
+  htp.set_ContentType('text/plain');
+  htp.add_CustomHeader('CUSTOM_HEADER: HEADER
+CUSTOM_HEADER1: HEADER1
+');
+  htp.prn(ap);
+  hrslt.ADD_FOOTER := false;
+  rollback;
+end;`
+)
 
 func TestServe(t *testing.T) {
 	var data = url.Values{
@@ -72,9 +108,19 @@ func TestServe(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	err = exec(dsn, fmt.Sprintf(stm_create_p, "server_test", "varchar2"))
+	if err != nil {
+		t.Fatalf("%s - Error when create procedure \"%s\": %s", "varchar2", "server_test", err.Error())
+	}
+
 	for _, v := range tests {
 		performRequest(t, v.method, v.username, v.password, v.urlStr, v.body, v.response, v.responseCode)
 	}
+	err = exec(dsn, "drop procedure server_test")
+	if err != nil {
+		t.Fatalf("%s - Error when drop procedure \"%s\": %s", "varchar2", "server_test", err.Error())
+	}
+
 }
 
 func TestExpandFileName(t *testing.T) {
@@ -85,7 +131,7 @@ func TestExpandFileName(t *testing.T) {
 	}{
 		{"${APP_DIR}", basePath},
 		{"${LOG_DIR}", basePath + "\\log\\"},
-		{"${SERVICE_NAME}", serverconf.ServiceName},
+		{"${SERVICE_NAME}", fmt.Sprintf("%s_%d", serverconf.ServiceName, serverconf.HTTPPort)},
 		{"${DATE}", time.Now().Format("2006_01_02")},
 	}
 
@@ -93,7 +139,6 @@ func TestExpandFileName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resetConfig()
 	err = parseConfig(buf)
 	if err != nil {
 		t.Fatal(err)
@@ -134,6 +179,9 @@ type VD struct {
 		ID  int32
 		SID string
 	} `json:"owa.UserGroups"`
+	SoapUserName string `json:"soap.DBUserName"`
+	SoapUserPass string `json:"soap.DBUserPass"`
+	SoapConnStr  string `json:"soap.DBConnStr"`
 }
 
 var serverconf = struct {
@@ -249,6 +297,13 @@ var serverconf = struct {
 					SID string
 				}{1, "DP-TST8"},
 			},
+		},
+		VD{
+			Path:         "/soap",
+			Type:         "SOAP",
+			SoapUserName: "a",
+			SoapUserPass: "aaa111",
+			SoapConnStr:  "DP-TST8",
 		},
 	},
 }
