@@ -1,5 +1,6 @@
 package main
 
+//go:generate C:\!Dev\GOPATH\src\github.com\vsdutka\gover\gover.exe
 import (
 	"flag"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 var (
 	logger              service.Logger
 	loggerLock          sync.Mutex
+	verFlag             *bool
 	svcFlag             *string
 	dsnFlag             *string
 	confNameFlag        *string
@@ -89,11 +91,18 @@ func main() {
 	oracle.IsDebug = false
 
 	flag.Usage = usage
+	verFlag := flag.Bool("version", false, "Show version")
 	svcFlag = flag.String("service", "", fmt.Sprintf("Control the system service. Valid actions: %q\n", service.ControlAction))
 	dsnFlag = flag.String("dsn", "", "    Oracle DSN (user/passw@sid)")
 	confNameFlag = flag.String("conf", "", "   Configuration name")
 	confReadTimeoutFlag = flag.Int("conf_tm", 10, "Configuration read timeout in seconds")
 	flag.Parse()
+
+	if *verFlag == true {
+		fmt.Println("Version: ", VERSION)
+		fmt.Println("Build:   ", BUILD_DATE)
+		os.Exit(0)
+	}
 
 	if (*confNameFlag == "") || (*dsnFlag == "") {
 		usage()

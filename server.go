@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -506,12 +507,24 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 							if i < len(s) {
 								headerValue = strings.TrimSpace(s[i+1:])
 							}
-							switch headerName {
-							case "Content-Type":
+							switch strings.ToLower(headerName) {
+							case "content-type":
 								{
 									res.ContentType = headerValue
 								}
-							case "Status":
+							case "content-disposition":
+								{
+									newVal := ""
+									for _, partValue := range strings.Split(headerValue, "; ") {
+										if strings.HasPrefix(partValue, "filename=") {
+											newVal += "filename=\"" + url.QueryEscape(strings.Replace(strings.Replace(partValue, "filename=", "", -1), "\"", "", -1)) + "\";"
+										} else {
+											newVal += partValue + ";"
+										}
+									}
+									w.Header().Set(headerName, newVal)
+								}
+							case "status":
 								{
 									i, err := strconv.Atoi(headerValue)
 									if err == nil {
@@ -585,8 +598,10 @@ var (
 	bMeta = [][]byte{
 		[]byte(`<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">`),
 		[]byte(`<meta http-equiv=Content-Type content="text/html; charset=windows-1251">`),
+		[]byte(`<meta http-equiv="CONTENT-TYPE content="text/html; charset=windows-1251">`),
+		[]byte(`<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">`),
 	}
-	bMetaEmpty = []byte(``)
+	bMetaEmpty = []byte(`<meta http-equiv="Content-Type" content="text/html; charset=utf-8">`)
 )
 
 const (
