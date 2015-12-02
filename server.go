@@ -213,47 +213,8 @@ func parseConfig(buf []byte) error {
 	if bytes.Equal(prevConf, buf) {
 		return nil
 	}
-	type _t struct {
-		ServiceName      string          `json:"Service.Name"`
-		ServiceDispName  string          `json:"Service.DisplayName"`
-		HTTPPort         int             `json:"Http.Port"`
-		HTTPDebugPort    int             `json:"Http.DebugPort"`
-		HTTPReadTimeout  int             `json:"Http.ReadTimeout"`
-		HTTPWriteTimeout int             `json:"Http.WriteTimeout"`
-		HTTPSsl          bool            `json:"Http.SSL"`
-		HTTPSslCert      string          `json:"Http.SSLCert"`
-		HTTPSslKey       string          `json:"Http.SSLKey"`
-		HTTPLogDir       string          `json:"Http.LogDir"`
-		HTTPUsers        json.RawMessage `json:"Http.Users"`
-		Handlers         []struct {
-			Path               string `json:"Path"`
-			Type               string `json:"Type"`
-			RootDir            string `json:"RootDir"`
-			RedirectPath       string `json:"RedirectPath"`
-			SessionIdleTimeout int    `json:"owa.SessionIdleTimeout"`
-			SessionWaitTimeout int    `json:"owa.SessionWaitTimeout"`
-			RequestUserInfo    bool   `json:"owa.ReqUserInfo"`
-			RequestUserRealm   string `json:"owa.ReqUserRealm"`
-			DefUserName        string `json:"owa.DBUserName"`
-			DefUserPass        string `json:"owa.DBUserPass"`
-			BeforeScript       string `json:"owa.BeforeScript"`
-			AfterScript        string `json:"owa.AfterScript"`
-			ParamStoreProc     string `json:"owa.ParamStroreProc"`
-			DocumentTable      string `json:"owa.DocumentTable"`
-			Templates          []struct {
-				Code string
-				Body string
-			} `json:"owa.Templates"`
-			Grps []struct {
-				ID  int32
-				SID string
-			} `json:"owa.UserGroups"`
-			SoapUserName string `json:"soap.DBUserName"`
-			SoapUserPass string `json:"soap.DBUserPass"`
-			SoapConnStr  string `json:"soap.DBConnStr"`
-		} `json:"Http.Handlers"`
-	}
-	var c = _t{
+
+	var c = serverConfigHolder{
 		HTTPReadTimeout:  240000,
 		HTTPWriteTimeout: 240000,
 		HTTPLogDir:       "${app_dir}\\log\\",
@@ -321,11 +282,44 @@ func parseConfig(buf []byte) error {
 
 			case "SOAP":
 				{
+					newRouter.GET(upath+"/*proc", newSoap(upath, c.Handlers[k].SoapUserName, c.Handlers[k].SoapUserPass, c.Handlers[k].SoapConnStr))
 					newRouter.POST(upath+"/*proc", newSoap(upath, c.Handlers[k].SoapUserName, c.Handlers[k].SoapUserPass, c.Handlers[k].SoapConnStr))
 				}
-			}
 
+			}
 		}
+		newRouter.GET("/debug/conf/server", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+			c := serverConfigHolder{
+				ServiceName:      confServiceName,
+				ServiceDispName:  confServiceDispName,
+				HTTPPort:         confHTTPPort,
+				HTTPDebugPort:    confHTTPDebugPort,
+				HTTPReadTimeout:  confHTTPReadTimeout,
+				HTTPWriteTimeout: confHTTPWriteTimeout,
+				HTTPSsl:          confHTTPSsl,
+				HTTPSslCert:      confHTTPSslCert,
+				HTTPSslKey:       confHTTPSslKey,
+				HTTPLogDir:       confHTTPLogDir,
+			}
+			buf, err := json.Marshal(c)
+			if err != nil {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write(buf)
+		})
+		newRouter.GET("/debug/conf/users", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+			buf, err := getUsers()
+			if err != nil {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write(buf)
+		})
 		// Начинаем изменять параметры
 		confLock.Lock()
 		defer confLock.Unlock()
@@ -544,21 +538,6 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 						// Поскольку буфер ВСЕГДА формируем в UTF-8,
 						// нужно изменить значение Charset в ContentType
 						res.ContentType = mt + "; charset=utf-8"
-
-						//						if cs, ok := prms["charset"]; ok {
-						//							resContent := make([]byte, len(res.Content))
-						//							e, _ := charset.Lookup(cs)
-						//							if e != nil {
-						//								_, _, err = e.NewEncoder().Transform(resContent, res.Content, true)
-						//								if err != nil {
-						//									panic(err)
-						//								}
-						//								res.Content = resContent
-						//							}
-						//						} else {
-						//							res.ContentType = mt + "; charset=utf-8"
-						//						}
-
 					}
 					w.Header().Set("Content-Type", res.ContentType)
 				}
@@ -592,6 +571,47 @@ func expandFileName(fileName string) string {
 			return ""
 		}
 	})
+}
+
+type serverConfigHolder struct {
+	ServiceName      string          `json:"Service.Name"`
+	ServiceDispName  string          `json:"Service.DisplayName"`
+	HTTPPort         int             `json:"Http.Port"`
+	HTTPDebugPort    int             `json:"Http.DebugPort"`
+	HTTPReadTimeout  int             `json:"Http.ReadTimeout"`
+	HTTPWriteTimeout int             `json:"Http.WriteTimeout"`
+	HTTPSsl          bool            `json:"Http.SSL"`
+	HTTPSslCert      string          `json:"Http.SSLCert"`
+	HTTPSslKey       string          `json:"Http.SSLKey"`
+	HTTPLogDir       string          `json:"Http.LogDir"`
+	HTTPUsers        json.RawMessage `json:"Http.Users"`
+	Handlers         []struct {
+		Path               string `json:"Path"`
+		Type               string `json:"Type"`
+		RootDir            string `json:"RootDir"`
+		RedirectPath       string `json:"RedirectPath"`
+		SessionIdleTimeout int    `json:"owa.SessionIdleTimeout"`
+		SessionWaitTimeout int    `json:"owa.SessionWaitTimeout"`
+		RequestUserInfo    bool   `json:"owa.ReqUserInfo"`
+		RequestUserRealm   string `json:"owa.ReqUserRealm"`
+		DefUserName        string `json:"owa.DBUserName"`
+		DefUserPass        string `json:"owa.DBUserPass"`
+		BeforeScript       string `json:"owa.BeforeScript"`
+		AfterScript        string `json:"owa.AfterScript"`
+		ParamStoreProc     string `json:"owa.ParamStroreProc"`
+		DocumentTable      string `json:"owa.DocumentTable"`
+		Templates          []struct {
+			Code string
+			Body string
+		} `json:"owa.Templates"`
+		Grps []struct {
+			ID  int32
+			SID string
+		} `json:"owa.UserGroups"`
+		SoapUserName string `json:"soap.DBUserName"`
+		SoapUserPass string `json:"soap.DBUserPass"`
+		SoapConnStr  string `json:"soap.DBConnStr"`
+	} `json:"Http.Handlers"`
 }
 
 var (

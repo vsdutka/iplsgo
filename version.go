@@ -1,5 +1,5 @@
 package main
 const (
-  VERSION = "1.0.18"
-  BUILD_DATE = "06-11-2015 16:58:57.3538008+03:00"
+  VERSION = "1.0.51"
+  BUILD_DATE = "02-12-2015 13:30:09.2621208+03:00"
 )

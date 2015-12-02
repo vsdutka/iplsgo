@@ -9,8 +9,8 @@ import (
 )
 
 type userInfo struct {
-	isSpecial bool
-	grpID     int32
+	IsSpecial bool
+	GrpID     int32
 }
 
 func getUserInfo(name string) (bool, int32, bool) {
@@ -20,7 +20,13 @@ func getUserInfo(name string) (bool, int32, bool) {
 	if !ok {
 		return false, -1, false
 	}
-	return u.isSpecial, u.grpID, true
+	return u.IsSpecial, u.GrpID, true
+}
+
+func getUsers() ([]byte, error) {
+	ulock.RLock()
+	defer ulock.RUnlock()
+	return json.Marshal(ulist)
 }
 
 func updateUsers(users []byte) {
@@ -58,12 +64,12 @@ func updateUsers(users []byte) {
 				u, ok := usersFree.Get().(*userInfo)
 				if !ok {
 					u = &userInfo{
-						isSpecial: t[k].IsSpecial,
-						grpID:     t[k].GRP_ID,
+						IsSpecial: t[k].IsSpecial,
+						GrpID:     t[k].GRP_ID,
 					}
 				} else {
-					u.isSpecial = t[k].IsSpecial
-					u.grpID = t[k].GRP_ID
+					u.IsSpecial = t[k].IsSpecial
+					u.GrpID = t[k].GRP_ID
 				}
 				ulist[strings.ToUpper(t[k].Name)] = u
 			}

@@ -10,27 +10,27 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"strings"
 )
 
 func newSoap(pathStr string, userName, userPass, connStr string,
 ) func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		if r.Method != "POST" {
-			writeError(w, http.StatusMethodNotAllowed, "soap: POST method required, received "+r.Method)
-			return
-		}
 
+		wsdlRequested := (r.Method == "GET") && (strings.ToUpper(r.URL.RawQuery) == "WSDL")
 		outBuf, err := func() ([]byte, error) {
+			buf, err := func() ([]byte, error) {
+				if wsdlRequested {
+					return []byte("WSDL"), nil
+				}
+				buf, err := ioutil.ReadAll(r.Body)
+				if err != nil {
+					return nil, errgo.New("soap: Body required, but error: " + err.Error())
+				}
+				return buf, nil
 
-			soapAction := r.Header.Get("SOAPAction")
-			if soapAction == "" {
-				return nil, errgo.New("soap: SOAPAction required")
-			}
-			buf, err := ioutil.ReadAll(r.Body)
-			if err != nil {
-				return nil, errgo.New("soap: Body required, but error: " + err.Error())
-			}
+			}()
 			if len(buf) == 0 {
 				return nil, errgo.New("soap: Body required")
 			}
@@ -94,8 +94,14 @@ func newSoap(pathStr string, userName, userPass, connStr string,
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+
+		if wsdlRequested {
+			w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+		} else {
+			w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+		}
+
 		w.WriteHeader(http.StatusOK)
-		w.Header().Set("Content-Type", "application/soap+xml; charset=utf-8")
 		w.Write(outBuf)
 	}
 }

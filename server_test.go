@@ -96,6 +96,7 @@ func TestServe(t *testing.T) {
 		{"GET", "/ti8_a/sfsfsf/a.server_test?ap=1", "", "", "", "1", http.StatusOK},
 		{"POST", "/ti8/a.server_test", "a", "aaa111", data.Encode(), data.Get("ap"), http.StatusOK},
 		{"POST", "/tI8/a.server_test", "a", "aaa111", data.Encode(), data.Get("ap"), http.StatusOK},
+		{"GET", "/debug/conf/users", "", "", "", "{\"A\":{\"IsSpecial\":false,\"GrpID\":1},\"USER001\":{\"IsSpecial\":false,\"GrpID\":1}}", http.StatusOK},
 	}
 
 	buf, err := json.Marshal(serverconf)

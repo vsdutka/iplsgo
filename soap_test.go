@@ -44,12 +44,13 @@ func TestSoap(t *testing.T) {
 		response     string
 		responseCode int
 	}{
-		{"GET", "/soap", nil, "", "404 page not found", http.StatusNotFound},
+		{"GET", "/soap", nil, "", "<a href=\"/soap/\">Moved Permanently</a>.", http.StatusMovedPermanently},
 		{"POST", "/soap", nil, "", "", http.StatusTemporaryRedirect},
-		{"GET", "/soap/soap", nil, "", "Method Not Allowed", http.StatusMethodNotAllowed},
-		{"POST", "/soap/soap", nil, "", "soap: SOAPAction required", http.StatusBadRequest},
+		{"GET", "/soap/soap", nil, "", "soap: Body required", http.StatusBadRequest},
+		{"GET", "/soap/soap?WSDL", nil, "", "WSDL", http.StatusOK},
+		{"POST", "/soap/soap", nil, "", "soap: Body required", http.StatusBadRequest},
 		{"POST", "/soap/soap", http.Header{"SOAPAction": []string{"ActionGet"}}, "", "soap: Body required", http.StatusBadRequest},
-		{"POST", "/soap/soap", http.Header{"SOAPAction": []string{"ActionGet"}}, "Тело", "Тело - Тело", http.StatusOK},
+		{"POST", "/soap/soap", http.Header{"SOAPAction": []string{"ActionGet"}}, "BODY", "BODY", http.StatusOK},
 	}
 
 	buf, err := json.Marshal(serverconf)
@@ -61,7 +62,27 @@ func TestSoap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = exec(dsn, `create or replace function soap(ABody in clob) return clob 
+is
+begin
+  if ABody = 'WSDL' then
+    return 'WSDL';
+  else
+    Return 'BODY';
+  end if;
+end;
+`)
+	if err != nil {
+		t.Fatalf("Error when create function \"soap\": %s", err.Error())
+	}
+
 	for _, v := range tests {
 		performSoapRequest(t, v.method, v.urlStr, v.headers, v.body, v.response, v.responseCode)
 	}
+
+	err = exec(dsn, "drop function soap")
+	if err != nil {
+		t.Fatalf("Error when drop function \"soap\": %s", err.Error())
+	}
+
 }

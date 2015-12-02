@@ -53,9 +53,6 @@ func startReading(dsn, configName string, timeout time.Duration) error {
 		return errgo.Newf("Error parse configuration: %s\n", err)
 	}
 	go func(timeout time.Duration) {
-		var (
-			prevBuf = buf[:len(buf)]
-		)
 		defer func() {
 			if conn != nil {
 				if conn.IsConnected() {
@@ -84,11 +81,9 @@ func startReading(dsn, configName string, timeout time.Duration) error {
 						if buf, err = readConfig(); err != nil {
 							return errgo.Newf("Error read configuration: %s\n", err)
 						}
-						if !bytes.Equal(prevBuf, buf) {
-							if err = parseConfig(buf); err != nil {
-								return errgo.Newf("Error parse configuration: %s\n", err)
-							}
-							prevBuf = buf[:len(buf)]
+
+						if err = parseConfig(buf); err != nil {
+							return errgo.Newf("Error parse configuration: %s\n", err)
 						}
 						return nil
 					}()
