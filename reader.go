@@ -16,18 +16,18 @@ var (
 )
 
 var (
-	stopChan    = make(chan struct{})
-	stoppedChan = make(chan struct{})
-	conn        *oracle.Connection
-	username    string
-	password    string
-	sid         string
-	configname  string
-	hostname    string
+	stopChan        = make(chan struct{})
+	stoppedChan     = make(chan struct{})
+	conn            *oracle.Connection
+	reader_username string
+	reader_password string
+	reader_sid      string
+	configname      string
+	hostname        string
 )
 
 func initReading(dsn, configName string) error {
-	username, password, sid = oracle.SplitDSN(dsn)
+	reader_username, reader_password, reader_sid = oracle.SplitDSN(dsn)
 	configname = configName
 	var err error
 	if hostname, err = os.Hostname(); err != nil {
@@ -128,7 +128,8 @@ func readConfig() ([]byte, error) {
 		}
 	}
 	if conn == nil {
-		conn, err = oracle.NewConnection(username, password, sid, false)
+		logInfof("Try to login %s@%s\n", reader_username, reader_sid)
+		conn, err = oracle.NewConnection(reader_username, reader_password, reader_sid, false)
 		if err != nil {
 			// Выходим. Прочитать не получиться
 			if conn != nil {

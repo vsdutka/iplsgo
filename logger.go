@@ -71,3 +71,6 @@ func init() {
 		}
 	}()
 }
+func writeToLog(msg string) {
+	logChan <- msg
+}

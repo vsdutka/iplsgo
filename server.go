@@ -171,7 +171,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 		url = url + "?" + params
 	}
 
-	logChan <- fmt.Sprintf("%s, %s, %s, %s, %s, %s, %d, %d, %d, %d, %s, %s, %v\r\n",
+	writeToLog(fmt.Sprintf("%s, %s, %s, %s, %s, %s, %d, %d, %d, %d, %s, %s, %v\r\n",
 		r.RemoteAddr,
 		user,
 		end.Format("2006.01.02"),
@@ -185,7 +185,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 		r.Method,
 		url,
 		latency,
-	)
+	))
 }
 
 func resetConfig() {
@@ -406,6 +406,7 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 			if !ok {
 				return false, ""
 			}
+			sid := ""
 			if sid, ok = grps[grpID]; !ok {
 				return false, ""
 			}
