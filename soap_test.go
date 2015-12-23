@@ -62,7 +62,7 @@ func TestSoap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = exec(dsn, `create or replace function soap(ABody in clob) return clob 
+	err = exec(`create or replace function soap(ABody in clob) return clob 
 is
 begin
   if ABody = 'WSDL' then
@@ -80,7 +80,7 @@ end;
 		performSoapRequest(t, v.method, v.urlStr, v.headers, v.body, v.response, v.responseCode)
 	}
 
-	err = exec(dsn, "drop function soap")
+	err = exec("drop function soap")
 	if err != nil {
 		t.Fatalf("Error when drop function \"soap\": %s", err.Error())
 	}
