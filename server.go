@@ -6,8 +6,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	//"golang.org/x/net/html/charset"
-	//"github.com/gorilla/mux"
 	"github.com/julienschmidt/httprouter"
 	"github.com/kardianos/osext"
 	"github.com/vsdutka/metrics"
@@ -15,11 +13,9 @@ import (
 	"github.com/vsdutka/otasker"
 	"gopkg.in/errgo.v1"
 	"html/template"
-	"mime"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -490,62 +486,67 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 			}
 		default:
 			{
-				if res.Headers != "" {
-					for _, s := range strings.Split(res.Headers, "\n") {
-						if s != "" {
-							i := strings.Index(s, ":")
-							if i == -1 {
-								i = len(s)
-							}
-							headerName := strings.TrimSpace(s[0:i])
-							headerValue := ""
-							if i < len(s) {
-								headerValue = strings.TrimSpace(s[i+1:])
-							}
-							switch strings.ToLower(headerName) {
-							case "content-type":
-								{
-									res.ContentType = headerValue
-								}
-							case "content-disposition":
-								{
-									newVal := ""
-									for _, partValue := range strings.Split(headerValue, "; ") {
-										if strings.HasPrefix(partValue, "filename=") {
-											newVal += "filename=\"" + url.QueryEscape(strings.Replace(strings.Replace(partValue, "filename=", "", -1), "\"", "", -1)) + "\";"
-										} else {
-											newVal += partValue + ";"
-										}
-									}
-									w.Header().Set(headerName, newVal)
-								}
-							case "status":
-								{
-									i, err := strconv.Atoi(headerValue)
-									if err == nil {
-										res.StatusCode = i
-									}
-								}
-							default:
-								{
-									w.Header().Set(headerName, headerValue)
-								}
+				//				if res.Headers != "" {
+				//					for _, s := range strings.Split(res.Headers, "\n") {
+				//						if s != "" {
+				//							i := strings.Index(s, ":")
+				//							if i == -1 {
+				//								i = len(s)
+				//							}
+				//							headerName := strings.TrimSpace(s[0:i])
+				//							headerValue := ""
+				//							if i < len(s) {
+				//								headerValue = strings.TrimSpace(s[i+1:])
+				//							}
+				//							switch strings.ToLower(headerName) {
+				//							case "content-type":
+				//								{
+				//									res.ContentType = headerValue
+				//								}
+				//							case "content-disposition":
+				//								{
+				//									newVal := ""
+				//									for _, partValue := range strings.Split(headerValue, "; ") {
+				//										if strings.HasPrefix(partValue, "filename=") {
+				//											newVal += "filename=\"" + url.QueryEscape(strings.Replace(strings.Replace(partValue, "filename=", "", -1), "\"", "", -1)) + "\";"
+				//										} else {
+				//											newVal += partValue + ";"
+				//										}
+				//									}
+				//									w.Header().Set(headerName, newVal)
+				//								}
+				//							case "status":
+				//								{
+				//									i, err := strconv.Atoi(headerValue)
+				//									if err == nil {
+				//										res.StatusCode = i
+				//									}
+				//								}
+				//							default:
+				//								{
+				//									w.Header().Set(headerName, headerValue)
+				//								}
+				//							}
+				//						}
+				//					}
+				//				}
+				for headerName, headerValue := range res.Headers {
+					switch strings.ToLower(headerName) {
+					case "status":
+						{
+							i, err := strconv.Atoi(headerValue)
+							if err == nil {
+								res.StatusCode = i
 							}
 						}
+					default:
+						{
+							w.Header().Set(headerName, headerValue)
+						}
 					}
+
 				}
-				if res.ContentType != "" {
-					if mt, _ /*prms*/, err := mime.ParseMediaType(res.ContentType); err == nil {
-						// Поскольку буфер ВСЕГДА формируем в UTF-8,
-						// нужно изменить значение Charset в ContentType
-						res.ContentType = mt + "; charset=utf-8"
-					}
-					w.Header().Set("Content-Type", res.ContentType)
-				}
-				//FIXME - Убрать костыль после того. как принудительная установка будет удалена из кода на PL/SQL
-				for k := range bMeta {
-					res.Content = bytes.Replace(res.Content, bMeta[k], bMetaEmpty, -1)
-				}
+				w.Header().Set("Content-Type", res.ContentType)
 				w.WriteHeader(res.StatusCode)
 				w.Write(res.Content)
 			}
@@ -614,16 +615,6 @@ type serverConfigHolder struct {
 		SoapConnStr  string `json:"soap.DBConnStr"`
 	} `json:"Http.Handlers"`
 }
-
-var (
-	bMeta = [][]byte{
-		[]byte(`<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">`),
-		[]byte(`<meta http-equiv=Content-Type content="text/html; charset=windows-1251">`),
-		[]byte(`<meta http-equiv="CONTENT-TYPE content="text/html; charset=windows-1251">`),
-		[]byte(`<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">`),
-	}
-	bMetaEmpty = []byte(`<meta http-equiv="Content-Type" content="text/html; charset=utf-8">`)
-)
 
 const (
 	sessions = `<HTML>
