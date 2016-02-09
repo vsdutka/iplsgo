@@ -160,7 +160,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		user = "-"
 	}
-	url := r.RequestURI
+	url := r.URL.Path
 
 	params := r.Form.Encode()
 	if params != "" {
