@@ -49,3 +49,5 @@ log/iPLSGo_10111/ops.json
 *.out
 *.pprof
 *.rar
+*.html
+*.cmd

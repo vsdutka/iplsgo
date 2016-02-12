@@ -66,7 +66,7 @@ func makeEnvParams(req *http.Request, docTab, remoteUser, mirrorPath string) map
 		"accept-language":      req.Header.Get("Accept-Language"),
 		"pragma":               req.Header.Get("pragma"),
 		"REQUEST_CHARSET":      "AL32UTF8",
-		"REQUEST_IANA_CHARSET": "",
+		"REQUEST_IANA_CHARSET": "UTF-8",
 		"REQUEST_METHOD":       req.Method,
 		"REQUEST_PROTOCOL":     req.Proto,
 		"REQUEST_SCHEME":       req.Proto,
