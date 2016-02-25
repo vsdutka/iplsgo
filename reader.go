@@ -148,33 +148,51 @@ func readConfig() ([]byte, error) {
 	if err = cur.Execute(stmReadConfig, []interface{}{configname, hostname}, nil); err != nil {
 		return nil, errgo.Newf("error executing `c.config`: %s", otasker.UnMask(err))
 	}
-	row, err := cur.FetchOne()
+	rows, err := cur.FetchAll()
 	if err != nil {
 		return nil, errgo.Newf("error executing `c.config`: %s", otasker.UnMask(err))
 	}
+	buf := make([]byte, 0, len(rows)*4000)
+	for k := range rows {
+		config_line, ok := rows[k][0].(string)
+		if !ok {
+			return nil, errgo.Newf("data is not String, but %T", rows[k][0])
+		}
+		buf = append(buf, []byte(config_line)...)
+	}
+	if bytes.Equal(buf, []byte("{}")) {
+		return nil, errgo.Newf("Configuration \"%s\" does not exists", configname)
+	}
+	return buf, nil
 
-	ext, ok := row[0].(*oracle.ExternalLobVar)
-	if !ok {
-		return nil, errgo.Newf("data is not *ExternalLobVar, but %T", row[0])
-	}
-	if ext != nil {
-		size, err := ext.Size(false)
-		if err != nil {
-			return nil, errgo.Newf("size error: ", err)
-		}
-		if size != 0 {
-			buf, err := ext.ReadAll()
-			if err != nil {
-				return nil, err
-			}
-			if bytes.Equal(buf, []byte("{}")) {
-				return nil, errgo.Newf("Configuration \"%s\" does not exists", configname)
-			}
-			return buf, nil
-		}
-		return nil, errgo.New("data size is 0")
-	}
-	return nil, errgo.New("data not available")
+	//	row, err := cur.FetchOne()
+	//	if err != nil {
+	//		return nil, errgo.Newf("error executing `c.config`: %s", otasker.UnMask(err))
+	//	}
+	//	ext, ok := row[0].(*oracle.ExternalLobVar)
+	//	if !ok {
+	//		return nil, errgo.Newf("data is not *ExternalLobVar, but %T", row[0])
+	//	}
+	//	if ext != nil {
+	//		size, err := ext.Size(false)
+	//		if err != nil {
+	//			return nil, errgo.Newf("size error: ", err)
+	//		}
+	//		if size != 0 {
+	//			buf, err := ext.ReadAll()
+	//			if err != nil {
+	//				return nil, err
+	//			}
+	//			if bytes.Equal(buf, []byte("{}")) {
+	//				return nil, errgo.Newf("Configuration \"%s\" does not exists", configname)
+	//			}
+	//			return buf, nil
+	//		}
+	//		return nil, errgo.New("data size is 0")
+	//	}
+	//	return nil, errgo.New("data not available")
 }
 
-const stmReadConfig = `select c.config(:1, :2)from dual`
+const stmReadConfig = `select * from table(c.config(:1, :2, ''))`
+
+//const stmReadConfig = `select c.config(:1, :2) from dual`

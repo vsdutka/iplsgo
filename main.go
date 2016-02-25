@@ -91,7 +91,7 @@ func main() {
 	oracle.IsDebug = false
 
 	flag.Usage = usage
-	verFlag := flag.Bool("version", false, "Show version")
+	verFlag = flag.Bool("version", false, "Show version")
 	svcFlag = flag.String("service", "", fmt.Sprintf("Control the system service. Valid actions: %q\n", service.ControlAction))
 	dsnFlag = flag.String("dsn", "", "    Oracle DSN (user/passw@sid)")
 	confNameFlag = flag.String("conf", "", "   Configuration name")
