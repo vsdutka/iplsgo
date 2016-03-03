@@ -6,13 +6,8 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/julienschmidt/httprouter"
-	"github.com/kardianos/osext"
-	"github.com/vsdutka/metrics"
-	"github.com/vsdutka/nspercent-encoding"
-	"github.com/vsdutka/otasker"
-	"gopkg.in/errgo.v1"
 	"html/template"
+	"math"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -23,6 +18,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/julienschmidt/httprouter"
+	"github.com/kardianos/osext"
+	"github.com/vsdutka/metrics"
+	"github.com/vsdutka/nspercent-encoding"
+	"github.com/vsdutka/otasker"
+	"gopkg.in/errgo.v1"
 )
 
 var (
@@ -432,6 +434,14 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 			return
 		}
 
+		if sessionWaitTimeout < 0 {
+			sessionWaitTimeout = math.MaxInt64
+		}
+
+		if sessionIdleTimeout < 0 {
+			sessionIdleTimeout = math.MaxInt64
+		}
+
 		res := otasker.Run(vpath, typeTasker, sessionID, taskID, userName, userPass, connStr,
 			paramStoreProc, beforeScript, afterScript, documentTable,
 			cgiEnv, procName, procParams, reqFiles,
@@ -486,50 +496,7 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 			}
 		default:
 			{
-				//				if res.Headers != "" {
-				//					for _, s := range strings.Split(res.Headers, "\n") {
-				//						if s != "" {
-				//							i := strings.Index(s, ":")
-				//							if i == -1 {
-				//								i = len(s)
-				//							}
-				//							headerName := strings.TrimSpace(s[0:i])
-				//							headerValue := ""
-				//							if i < len(s) {
-				//								headerValue = strings.TrimSpace(s[i+1:])
-				//							}
-				//							switch strings.ToLower(headerName) {
-				//							case "content-type":
-				//								{
-				//									res.ContentType = headerValue
-				//								}
-				//							case "content-disposition":
-				//								{
-				//									newVal := ""
-				//									for _, partValue := range strings.Split(headerValue, "; ") {
-				//										if strings.HasPrefix(partValue, "filename=") {
-				//											newVal += "filename=\"" + url.QueryEscape(strings.Replace(strings.Replace(partValue, "filename=", "", -1), "\"", "", -1)) + "\";"
-				//										} else {
-				//											newVal += partValue + ";"
-				//										}
-				//									}
-				//									w.Header().Set(headerName, newVal)
-				//								}
-				//							case "status":
-				//								{
-				//									i, err := strconv.Atoi(headerValue)
-				//									if err == nil {
-				//										res.StatusCode = i
-				//									}
-				//								}
-				//							default:
-				//								{
-				//									w.Header().Set(headerName, headerValue)
-				//								}
-				//							}
-				//						}
-				//					}
-				//				}
+				location := ""
 				for headerName, headerValue := range res.Headers {
 					switch strings.ToLower(headerName) {
 					case "status":
@@ -539,6 +506,14 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 								res.StatusCode = i
 							}
 						}
+					case "location":
+						{
+							//FIXME - убрать после тог, как поймем, почему APEX генерирует неправильную ссылку
+							if strings.HasPrefix(headerValue, "/f?p") {
+								headerValue = headerValue[1:]
+							}
+							location = headerValue
+						}
 					default:
 						{
 							w.Header().Set(headerName, headerValue)
@@ -546,9 +521,13 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 					}
 
 				}
-				w.Header().Set("Content-Type", res.ContentType)
-				w.WriteHeader(res.StatusCode)
-				w.Write(res.Content)
+				if (res.StatusCode == http.StatusMovedPermanently) || (res.StatusCode == http.StatusFound) {
+					http.Redirect(w, r, location, res.StatusCode)
+				} else {
+					w.Header().Set("Content-Type", res.ContentType)
+					w.WriteHeader(res.StatusCode)
+					w.Write(res.Content)
+				}
 			}
 		}
 	}
