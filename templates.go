@@ -17,10 +17,10 @@ func responseError(w http.ResponseWriter, templateBody, e string) {
 		return
 	}
 
-	type ErrorInfo struct{ ErrMsg string }
+	type ErrorInfo struct{ ErrMsg template.HTML }
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	err = templ.ExecuteTemplate(w, "error", ErrorInfo{e})
+	err = templ.ExecuteTemplate(w, "error", ErrorInfo{template.HTML(e)})
 
 	if err != nil {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")

@@ -4,15 +4,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	//"github.com/davecheney/profile"
-	"github.com/kardianos/service"
-	_ "golang.org/x/tools/go/ssa"
-	"gopkg.in/goracle.v1/oracle"
 	"log"
 	"os"
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/kardianos/service"
+	_ "golang.org/x/tools/go/ssa"
+	"gopkg.in/goracle.v1/oracle"
 )
 
 var (
@@ -108,12 +108,6 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
-	//	cfg := profile.Config{
-	//		CPUProfile:  true,
-	//		ProfilePath: ".", // store profiles in current directory
-	//	}
-
-	//	defer profile.Start(&cfg).Stop()
 
 	err := startReading(*dsnFlag, *confNameFlag, (time.Duration)(*confReadTimeoutFlag)*time.Second)
 	if err != nil {
