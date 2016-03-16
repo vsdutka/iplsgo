@@ -21,10 +21,12 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/kardianos/osext"
+	"gopkg.in/errgo.v1"
+
 	"github.com/vsdutka/metrics"
+	"github.com/vsdutka/mltpart"
 	"github.com/vsdutka/nspercent-encoding"
 	"github.com/vsdutka/otasker"
-	"gopkg.in/errgo.v1"
 )
 
 var (
@@ -364,7 +366,7 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 		_, procName := filepath.Split(path.Clean(r.URL.Path))
 		vpath := pathStr
 
-		reqFiles, _ := otasker.ParseMultipartFormEx(r, 64<<20)
+		reqFiles, _ := mltpart.ParseMultipartFormEx(r, 64<<20)
 
 		if procName == "!" {
 			sortKeyName := r.FormValue("Sort")
