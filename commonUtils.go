@@ -2,12 +2,13 @@
 package main
 
 import (
-	"code.google.com/p/go-uuid/uuid"
-	"github.com/vsdutka/otasker"
 	"net"
 	"net/http"
-	"net/url"
+	//"net/url"
 	"strings"
+
+	"code.google.com/p/go-uuid/uuid"
+	"github.com/vsdutka/otasker"
 )
 
 func makeHandlerID(isSpecial bool, userName, userPass, debugIP string, req *http.Request) string {
@@ -41,7 +42,7 @@ func makeWaitForm(req *http.Request, taskID string) string {
 	s = "<form id=\"__gmrf__\" action=\"" + s + "\" method=\"post\" >\n"
 	for key, vals := range req.PostForm {
 		for val := range vals {
-			s = s + "<input type=\"hidden\" name=\"" + key + "\" value=\"" + url.QueryEscape(vals[val]) + "\">\n"
+			s = s + "<input type=\"hidden\" name=\"" + key + "\" value=\"" + /*url.QueryEscape(vals[val])*/ strings.Replace(vals[val], "\"", "&quot;", -1) + "\">\n"
 		}
 	}
 	if req.MultipartForm != nil {
