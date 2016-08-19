@@ -29,6 +29,10 @@ import (
 	"github.com/vsdutka/otasker"
 )
 
+const (
+	defHTTPtimeout = 2400000
+)
+
 var (
 	confLock             sync.RWMutex
 	confServerReaded     = false
@@ -55,8 +59,8 @@ func startServer() {
 		if confHTTPDebugPort != 0 {
 			logInfof("Debug listener starting on port \"%d\"\n", confHTTPDebugPort)
 			debugHTTP := &http.Server{Addr: fmt.Sprintf(":%d", confHTTPDebugPort),
-				ReadTimeout:  240 * time.Second,
-				WriteTimeout: 240 * time.Second,
+				ReadTimeout:  time.Duration(confHTTPReadTimeout) * time.Millisecond,
+				WriteTimeout: time.Duration(confHTTPReadTimeout) * time.Millisecond,
 				Handler:      http.DefaultServeMux,
 			}
 			if err := debugHTTP.ListenAndServe(); err != nil {
@@ -196,8 +200,8 @@ func resetConfig() {
 	confServiceDispName = ""
 	confHTTPPort = 0
 	confHTTPDebugPort = 0
-	confHTTPReadTimeout = 240000
-	confHTTPWriteTimeout = 240000
+	confHTTPReadTimeout = defHTTPtimeout
+	confHTTPWriteTimeout = defHTTPtimeout
 	confHTTPSsl = false
 	confHTTPSslCert = ""
 	confHTTPSslKey = ""
@@ -215,8 +219,8 @@ func parseConfig(buf []byte) error {
 	}
 
 	var c = serverConfigHolder{
-		HTTPReadTimeout:  240000,
-		HTTPWriteTimeout: 240000,
+		HTTPReadTimeout:  defHTTPtimeout,
+		HTTPWriteTimeout: defHTTPtimeout,
 		HTTPLogDir:       "${app_dir}\\log\\",
 	}
 

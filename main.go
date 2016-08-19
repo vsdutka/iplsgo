@@ -15,6 +15,7 @@ import (
 	"gopkg.in/goracle.v1/oracle"
 )
 
+//ВАЖНО - собирать с GODEBUG=cgocheck=0
 var (
 	logger              service.Logger
 	loggerLock          sync.Mutex
