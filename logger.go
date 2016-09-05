@@ -2,12 +2,12 @@
 package main
 
 import (
-	"github.com/vsdutka/metrics"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/vsdutka/metrics"
 )
 
 var countOfRequests = metrics.NewInt("Http_Number_Of_Requests", "HTTP - Number of http requests", "Items", "i")
@@ -39,8 +39,6 @@ func init() {
 		var (
 			lastLogging = time.Time{}
 			logFile     *os.File
-			err         error
-			str         string
 		)
 		defer func() {
 			if logFile != nil {
@@ -49,7 +47,7 @@ func init() {
 		}()
 		for {
 			select {
-			case str = <-logChan:
+			case str := <-logChan:
 				{
 					if lastLogging.Format("2006_01_02") != time.Now().Format("2006_01_02") {
 						if logFile != nil {
@@ -59,13 +57,18 @@ func init() {
 						dir, _ := filepath.Split(fileName)
 						os.MkdirAll(dir, os.ModeDir)
 
+						var err error
+
 						logFile, err = os.OpenFile(fileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 						if err != nil {
-							log.Fatalln(err)
+							logError(err)
+							continue
 						}
 					}
 					lastLogging = time.Now()
-					logFile.WriteString(str)
+					if _, err := logFile.WriteString(str); err != nil {
+						logError(err)
+					}
 				}
 			}
 		}
