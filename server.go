@@ -503,26 +503,28 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 		default:
 			{
 				location := ""
-				for headerName, headerValue := range res.Headers {
-					switch strings.ToLower(headerName) {
-					case "status":
-						{
-							i, err := strconv.Atoi(headerValue)
-							if err == nil {
-								res.StatusCode = i
+				for headerName, headerValues := range res.Headers {
+					for _, headerValue := range headerValues {
+						switch strings.ToLower(headerName) {
+						case "status":
+							{
+								i, err := strconv.Atoi(headerValue)
+								if err == nil {
+									res.StatusCode = i
+								}
 							}
-						}
-					case "location":
-						{
-							//FIXME - убрать после тог, как поймем, почему APEX генерирует неправильную ссылку
-							if strings.HasPrefix(headerValue, "/f?p") {
-								headerValue = headerValue[1:]
+						case "location":
+							{
+								//FIXME - убрать после того, как поймем, почему APEX генерирует неправильную ссылку
+								if strings.HasPrefix(headerValue, "/f?p") {
+									headerValue = headerValue[1:]
+								}
+								location = headerValue
 							}
-							location = headerValue
-						}
-					default:
-						{
-							w.Header().Set(headerName, headerValue)
+						default:
+							{
+								w.Header().Add(headerName, headerValue)
+							}
 						}
 					}
 

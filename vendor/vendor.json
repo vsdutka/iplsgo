@@ -1,0 +1,19 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "dlqrHYzfjqjpVy/P3O7luVc8rDU=",
+			"path": "github.com/vsdutka/otasker",
+			"revision": "47ecd5bd39144eef79b8aa6a48ba5a273fe4892e",
+			"revisionTime": "2016-08-19T12:23:09Z"
+		},
+		{
+			"checksumSHA1": "h36TNIqw3hj9dBCEA7zVCQr3fD0=",
+			"path": "gopkg.in/goracle.v1/oracle",
+			"revision": "228a8015bd15ab714635d3b26db258d5ddef4c7e",
+			"revisionTime": "2015-06-04T16:35:50Z"
+		}
+	],
+	"rootPath": "github.com/vsdutka/iplsgo"
+}
