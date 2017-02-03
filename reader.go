@@ -3,12 +3,13 @@ package main
 
 import (
 	"bytes"
-	"github.com/vsdutka/metrics"
-	"github.com/vsdutka/otasker"
-	"gopkg.in/errgo.v1"
-	"gopkg.in/goracle.v1/oracle"
 	"os"
 	"time"
+
+	"github.com/vsdutka/iplsgo/otasker"
+	"github.com/vsdutka/metrics"
+	"gopkg.in/errgo.v1"
+	"gopkg.in/goracle.v1/oracle"
 )
 
 var (

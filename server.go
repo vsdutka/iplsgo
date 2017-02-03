@@ -23,7 +23,7 @@ import (
 	"github.com/kardianos/osext"
 	"gopkg.in/errgo.v1"
 
-	"github.com/vsdutka/iplsql/otasker"
+	"github.com/vsdutka/iplsgo/otasker"
 	"github.com/vsdutka/metrics"
 	"github.com/vsdutka/mltpart"
 	"github.com/vsdutka/nspercent-encoding"

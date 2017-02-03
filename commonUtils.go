@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"code.google.com/p/go-uuid/uuid"
-	"github.com/vsdutka/otasker"
+	"github.com/vsdutka/iplsgo/otasker"
 )
 
 func makeHandlerID(isSpecial bool, userName, userPass, debugIP string, req *http.Request) string {
