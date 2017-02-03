@@ -51,3 +51,4 @@ log/iPLSGo_10111/ops.json
 *.rar
 *.html
 *.cmd
+_Vendor/*.*
