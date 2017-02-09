@@ -23,6 +23,21 @@ func getUserInfo(name string) (bool, int32, bool) {
 	return u.IsSpecial, u.GrpID, true
 }
 
+func getConnectionParams(user string, grps map[int32]string) (bool, string) {
+	if user == "" {
+		return false, ""
+	}
+	isSpecial, grpID, ok := getUserInfo(user)
+	if !ok {
+		return false, ""
+	}
+	sid := ""
+	if sid, ok = grps[grpID]; !ok {
+		return false, ""
+	}
+	return isSpecial, sid
+}
+
 func getUsers() ([]byte, error) {
 	ulock.RLock()
 	defer ulock.RUnlock()

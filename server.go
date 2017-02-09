@@ -81,12 +81,19 @@ func startServer() {
 			ConnState: func(conn net.Conn, cs http.ConnState) {
 				switch cs {
 				case http.StateNew:
+					fmt.Println("Connection opened")
 					connCounter.Add(1)
+					//conn.
+				case http.StateIdle:
+					fmt.Println("Connection Idle")
 				case http.StateClosed:
+					fmt.Println("Connection closed")
 					connCounter.Add(-1)
 				}
 			},
 			Handler: http.DefaultServeMux}
+
+		//serverHTTP.SetKeepAlivesEnabled(true)
 
 		if confHTTPSsl {
 			err := func() error {
@@ -271,14 +278,31 @@ func parseConfig(buf []byte) error {
 						grps[v1.ID] = v1.SID
 					}
 
-					f := newOwa(upath, typeTasker,
-						time.Duration(c.Handlers[k].SessionIdleTimeout)*time.Millisecond,
-						time.Duration(c.Handlers[k].SessionWaitTimeout)*time.Millisecond,
-						c.Handlers[k].RequestUserInfo, c.Handlers[k].RequestUserRealm,
-						c.Handlers[k].DefUserName, c.Handlers[k].DefUserPass,
-						c.Handlers[k].BeforeScript, c.Handlers[k].AfterScript,
-						c.Handlers[k].ParamStoreProc, c.Handlers[k].DocumentTable,
-						templates, grps)
+					//					f := Authenticator("Basic", c.Handlers[k].RequestUserRealm, c.Handlers[k].DefUserName, c.Handlers[k].DefUserPass, grps,
+					//						newOwa(upath, typeTasker,
+					//							time.Duration(c.Handlers[k].SessionIdleTimeout)*time.Millisecond,
+					//							time.Duration(c.Handlers[k].SessionWaitTimeout)*time.Millisecond,
+					//							//c.Handlers[k].RequestUserInfo,
+					//							c.Handlers[k].RequestUserRealm,
+					//							//c.Handlers[k].DefUserName, c.Handlers[k].DefUserPass,
+					//							c.Handlers[k].BeforeScript, c.Handlers[k].AfterScript,
+					//							c.Handlers[k].ParamStoreProc, c.Handlers[k].DocumentTable,
+					//							templates /*, grps*/))
+
+					f := Authenticator(
+						c.Handlers[k].AuthType,
+						c.Handlers[k].RequestUserRealm,
+						c.Handlers[k].DefUserName,
+						c.Handlers[k].DefUserPass,
+						grps,
+						newOwa(upath, typeTasker,
+							time.Duration(c.Handlers[k].SessionIdleTimeout)*time.Millisecond,
+							time.Duration(c.Handlers[k].SessionWaitTimeout)*time.Millisecond,
+
+							c.Handlers[k].RequestUserRealm,
+							c.Handlers[k].BeforeScript, c.Handlers[k].AfterScript,
+							c.Handlers[k].ParamStoreProc, c.Handlers[k].DocumentTable,
+							templates /*, grps*/))
 
 					newRouter.GET(upath+"/*proc", f)
 					newRouter.POST(upath+"/*proc", f)
@@ -358,10 +382,11 @@ func newRedirect(redirectPath string) func(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeout time.Duration, requestUserInfo bool,
-	requestUserRealm, defUserName, defUserPass, beforeScript,
+func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeout time.Duration,
+	requestUserRealm,
+	beforeScript,
 	afterScript, paramStoreProc, documentTable string,
-	templates map[string]string, grps map[int32]string,
+	templates map[string]string,
 ) func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
@@ -379,51 +404,62 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 			return
 		}
 		// -- //
-		userName, userPass, ok := r.BasicAuth()
+		//		userName, userPass, ok := r.BasicAuth()
 
-		remoteUser := userName
+		//		remoteUser := userName
+		//		if remoteUser == "" {
+		//			remoteUser = "-"
+		//		}
+
+		//		if !requestUserInfo {
+		//			// Авторизация от клиента не требуется.
+		//			// Используем значения по умолчанию
+		//			userName = defUserName
+		//			userPass = defUserPass
+		//		} else {
+		//			if !ok {
+		//				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s%s\"", r.Host, requestUserRealm))
+		//				w.WriteHeader(http.StatusUnauthorized)
+		//				w.Write([]byte("Unauthorized"))
+		//				return
+		//			}
+		//		}
+		authUserName := r.Header.Get("X-AuthUserName")
+		oraUserName := r.Header.Get("X-LoginUserName")
+		oraUserPass := r.Header.Get("X-LoginPassword")
+		oraConnStr := r.Header.Get("X-LoginConnextionString")
+		allowManyConnection := r.Header.Get("X-LoginMany") == "true"
+
+		remoteUser := authUserName
 		if remoteUser == "" {
 			remoteUser = "-"
 		}
 
-		if !requestUserInfo {
-			// Авторизация от клиента не требуется.
-			// Используем значения по умолчанию
-			userName = defUserName
-			userPass = defUserPass
-		} else {
-			if !ok {
-				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s%s\"", r.Host, requestUserRealm))
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte("Unauthorized"))
-				return
-			}
-		}
-		dumpFileName := expandFileName(fmt.Sprintf("${log_dir}\\err_%s_${datetime}.log", userName))
+		dumpFileName := expandFileName(fmt.Sprintf("${log_dir}\\err_%s_${datetime}.log", authUserName))
 
-		var isSpecial bool
-		isSpecial, connStr := func(user string) (bool, string) {
-			if user == "" {
-				return false, ""
-			}
-			isSpecial, grpID, ok := getUserInfo(user)
-			if !ok {
-				return false, ""
-			}
-			sid := ""
-			if sid, ok = grps[grpID]; !ok {
-				return false, ""
-			}
-			return isSpecial, sid
-		}(userName)
-		if connStr == "" {
-			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s%s\"", r.Host, requestUserRealm))
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
-			return
-		}
+		//		var isSpecial bool
+		//		isSpecial, connStr := func(user string) (bool, string) {
+		//			if user == "" {
+		//				return false, ""
+		//			}
+		//			isSpecial, grpID, ok := getUserInfo(user)
+		//			if !ok {
+		//				return false, ""
+		//			}
+		//			sid := ""
+		//			if sid, ok = grps[grpID]; !ok {
+		//				return false, ""
+		//			}
+		//			return isSpecial, sid
+		//		}(userName)
+		//		if connStr == "" {
+		//			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s%s\"", r.Host, requestUserRealm))
+		//			w.WriteHeader(http.StatusUnauthorized)
+		//			w.Write([]byte("Unauthorized"))
+		//			return
+		//		}
 
-		sessionID := makeHandlerID(isSpecial, userName, userPass, r.Header.Get("DebugIP"), r)
+		sessionID := makeHandlerID(allowManyConnection, oraUserName, oraUserPass, r.Header.Get("DebugIP"), r)
 		taskID := makeTaskID(r)
 
 		cgiEnv := makeEnvParams(r, documentTable, remoteUser, requestUserRealm+"/")
@@ -448,7 +484,7 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 			sessionIdleTimeout = math.MaxInt64
 		}
 
-		res := otasker.Run(vpath, typeTasker, sessionID, taskID, userName, userPass, connStr,
+		res := otasker.Run(vpath, typeTasker, sessionID, taskID, authUserName, oraUserName, oraUserPass, oraConnStr,
 			paramStoreProc, beforeScript, afterScript, documentTable,
 			cgiEnv, procName, procParams, reqFiles,
 			sessionWaitTimeout, sessionIdleTimeout, dumpFileName)
@@ -468,7 +504,7 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 					Duration int64
 				}
 
-				responseTemplate(w, "rwait", templates["rwait"], DataInfo{userName, template.HTML(s), res.Duration})
+				responseTemplate(w, "rwait", templates["rwait"], DataInfo{authUserName, template.HTML(s), res.Duration})
 			}
 		case otasker.StatusBreakPage:
 			{
@@ -480,7 +516,7 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 					Duration int64
 				}
 
-				responseTemplate(w, "rbreak", templates["rbreak"], DataInfo{userName, template.HTML(s), res.Duration})
+				responseTemplate(w, "rbreak", templates["rbreak"], DataInfo{authUserName, template.HTML(s), res.Duration})
 			}
 		case otasker.StatusRequestWasInterrupted:
 			{
@@ -488,7 +524,8 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 			}
 		case otasker.StatusInvalidUsernameOrPassword:
 			{
-				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", r.Host))
+				//FIXME Исправить
+				//w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", r.Host))
 				w.WriteHeader(http.StatusUnauthorized)
 				w.Write([]byte("Unauthorized"))
 			}
@@ -533,6 +570,7 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 					http.Redirect(w, r, location, res.StatusCode)
 				} else {
 					w.Header().Set("Content-Type", res.ContentType)
+					w.Header().Set("Content-Length", strconv.Itoa(len(res.Content)))
 					w.WriteHeader(res.StatusCode)
 					w.Write(res.Content)
 				}
@@ -581,7 +619,7 @@ type serverConfigHolder struct {
 		RedirectPath       string `json:"RedirectPath"`
 		SessionIdleTimeout int    `json:"owa.SessionIdleTimeout"`
 		SessionWaitTimeout int    `json:"owa.SessionWaitTimeout"`
-		RequestUserInfo    bool   `json:"owa.ReqUserInfo"`
+		AuthType           int    `json:"owa.AuthType"`
 		RequestUserRealm   string `json:"owa.ReqUserRealm"`
 		DefUserName        string `json:"owa.DBUserName"`
 		DefUserPass        string `json:"owa.DBUserPass"`

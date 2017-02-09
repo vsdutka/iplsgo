@@ -40,9 +40,10 @@ type OracleTaskResult struct {
 type OracleTasker interface {
 	Run(sessionID,
 		taskID,
-		userName,
-		userPass,
-		connStr,
+		authUserName,
+		oraUserName,
+		oraUserPass,
+		oraConnStr,
 		paramStoreProc,
 		beforeScript,
 		afterScript,
@@ -164,7 +165,7 @@ func (r *oracleTasker) CloseAndFree() error {
 	return nil
 }
 
-func (r *oracleTasker) Run(sessionID, taskID, userName, userPass, connStr,
+func (r *oracleTasker) Run(sessionID, taskID, authUserName, oraUserName, oraUserPass, oraConnStr,
 	paramStoreProc, beforeScript, afterScript, documentTable string,
 	cgiEnv map[string]string, procName string, urlParams url.Values,
 	reqFiles *mltpart.Form, dumpErrorFileName string) OracleTaskResult {
@@ -178,9 +179,9 @@ func (r *oracleTasker) Run(sessionID, taskID, userName, userPass, connStr,
 		r.logRequestProceeded++
 		r.logSessionID = sessionID
 		r.logTaskID = taskID
-		r.logUserName = userName
-		r.logUserPass = userPass
-		r.logConnStr = connStr
+		r.logUserName = oraUserName
+		r.logUserPass = oraUserPass
+		r.logConnStr = oraConnStr
 		r.logProcName = procName
 		r.stateIsWorking = true
 	}()
@@ -205,10 +206,10 @@ func (r *oracleTasker) Run(sessionID, taskID, userName, userPass, connStr,
 	bg := time.Now()
 	//var needDisconnect bool
 	var res = OracleTaskResult{}
-	if err := r.connect(userName, userPass, connStr); err != nil {
+	if err := r.connect(oraUserName, oraUserPass, oraConnStr); err != nil {
 		res.StatusCode, res.Content /*needDisconnect*/, _ = packError(err)
 		// Формируем дамп до закрытия соединения, чтобы получить корректный запрос из последнего шага
-		r.dumpError(userName, connStr, dumpErrorFileName, err)
+		r.dumpError(oraUserName, oraConnStr, dumpErrorFileName, err)
 
 		//Если произошла ошибка, всегда закрываем соединение с БД
 		r.disconnect()
@@ -226,7 +227,7 @@ func (r *oracleTasker) Run(sessionID, taskID, userName, userPass, connStr,
 		cgiEnv, procName, urlParams, reqFiles); err != nil {
 		res.StatusCode, res.Content /*needDisconnect*/, _ = packError(err)
 		// Формируем дамп до закрытия соединения, чтобы получить корректный запрос из последнего шага
-		r.dumpError(userName, connStr, dumpErrorFileName, err)
+		r.dumpError(oraUserName, oraConnStr, dumpErrorFileName, err)
 
 		//Если произошла ошибка, всегда закрываем соединение с БД
 		r.disconnect()
