@@ -81,13 +81,8 @@ func startServer() {
 			ConnState: func(conn net.Conn, cs http.ConnState) {
 				switch cs {
 				case http.StateNew:
-					fmt.Println("Connection opened")
 					connCounter.Add(1)
-					//conn.
-				case http.StateIdle:
-					fmt.Println("Connection Idle")
 				case http.StateClosed:
-					fmt.Println("Connection closed")
 					connCounter.Add(-1)
 				}
 			},
@@ -278,17 +273,6 @@ func parseConfig(buf []byte) error {
 						grps[v1.ID] = v1.SID
 					}
 
-					//					f := Authenticator("Basic", c.Handlers[k].RequestUserRealm, c.Handlers[k].DefUserName, c.Handlers[k].DefUserPass, grps,
-					//						newOwa(upath, typeTasker,
-					//							time.Duration(c.Handlers[k].SessionIdleTimeout)*time.Millisecond,
-					//							time.Duration(c.Handlers[k].SessionWaitTimeout)*time.Millisecond,
-					//							//c.Handlers[k].RequestUserInfo,
-					//							c.Handlers[k].RequestUserRealm,
-					//							//c.Handlers[k].DefUserName, c.Handlers[k].DefUserPass,
-					//							c.Handlers[k].BeforeScript, c.Handlers[k].AfterScript,
-					//							c.Handlers[k].ParamStoreProc, c.Handlers[k].DocumentTable,
-					//							templates /*, grps*/))
-
 					f := Authenticator(
 						c.Handlers[k].AuthType,
 						c.Handlers[k].RequestUserRealm,
@@ -302,7 +286,7 @@ func parseConfig(buf []byte) error {
 							c.Handlers[k].RequestUserRealm,
 							c.Handlers[k].BeforeScript, c.Handlers[k].AfterScript,
 							c.Handlers[k].ParamStoreProc, c.Handlers[k].DocumentTable,
-							templates /*, grps*/))
+							templates))
 
 					newRouter.GET(upath+"/*proc", f)
 					newRouter.POST(upath+"/*proc", f)
@@ -404,30 +388,11 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 			return
 		}
 		// -- //
-		//		userName, userPass, ok := r.BasicAuth()
 
-		//		remoteUser := userName
-		//		if remoteUser == "" {
-		//			remoteUser = "-"
-		//		}
-
-		//		if !requestUserInfo {
-		//			// Авторизация от клиента не требуется.
-		//			// Используем значения по умолчанию
-		//			userName = defUserName
-		//			userPass = defUserPass
-		//		} else {
-		//			if !ok {
-		//				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s%s\"", r.Host, requestUserRealm))
-		//				w.WriteHeader(http.StatusUnauthorized)
-		//				w.Write([]byte("Unauthorized"))
-		//				return
-		//			}
-		//		}
 		authUserName := r.Header.Get("X-AuthUserName")
 		oraUserName := r.Header.Get("X-LoginUserName")
 		oraUserPass := r.Header.Get("X-LoginPassword")
-		oraConnStr := r.Header.Get("X-LoginConnextionString")
+		oraConnStr := r.Header.Get("X-LoginConnectionString")
 		allowManyConnection := r.Header.Get("X-LoginMany") == "true"
 
 		remoteUser := authUserName
@@ -436,28 +401,6 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 		}
 
 		dumpFileName := expandFileName(fmt.Sprintf("${log_dir}\\err_%s_${datetime}.log", authUserName))
-
-		//		var isSpecial bool
-		//		isSpecial, connStr := func(user string) (bool, string) {
-		//			if user == "" {
-		//				return false, ""
-		//			}
-		//			isSpecial, grpID, ok := getUserInfo(user)
-		//			if !ok {
-		//				return false, ""
-		//			}
-		//			sid := ""
-		//			if sid, ok = grps[grpID]; !ok {
-		//				return false, ""
-		//			}
-		//			return isSpecial, sid
-		//		}(userName)
-		//		if connStr == "" {
-		//			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s%s\"", r.Host, requestUserRealm))
-		//			w.WriteHeader(http.StatusUnauthorized)
-		//			w.Write([]byte("Unauthorized"))
-		//			return
-		//		}
 
 		sessionID := makeHandlerID(allowManyConnection, oraUserName, oraUserPass, r.Header.Get("DebugIP"), r)
 		taskID := makeTaskID(r)
