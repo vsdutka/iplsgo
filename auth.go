@@ -12,11 +12,14 @@ import (
 	"github.com/vsdutka/iplsgo/auth/ntlm"
 )
 
-func Authenticator(authType int, authRealm, defUserName, defUserPass string, grps map[int32]string, next httprouter.Handle) httprouter.Handle {
+func Authenticator(authType int,
+	authRealm, defUserName, defUserPass, authNTLMDBUserName, authNTLMDBUserPass string,
+	grps map[int32]string,
+	next httprouter.Handle) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		switch authType {
 		case 0 /*""*/ :
-			r.Header.Add("X-AuthUserName", defUserName)
+			r.Header.Add("X-AuthUserName", defUserName) //Так - фиктивными записями в header - передаём данные, чтобы не менять конструкции http.Request
 			r.Header.Add("X-LoginUserName", defUserName)
 			r.Header.Add("X-LoginPassword", defUserPass)
 
@@ -41,7 +44,7 @@ func Authenticator(authType int, authRealm, defUserName, defUserPass string, grp
 					return
 				}
 
-				r.Header.Add("X-AuthUserName", userName)
+				r.Header.Add("X-AuthUserName", userName) //Так - фиктивными записями в header - передаём данные, чтобы не менять конструкции http.Request
 				r.Header.Add("X-LoginUserName", userName)
 				r.Header.Add("X-LoginPassword", userPass)
 
@@ -119,9 +122,9 @@ func Authenticator(authType int, authRealm, defUserName, defUserPass string, grp
 				if len(names) > 1 {
 					userName = names[1]
 				}
-				r.Header.Add("X-AuthUserName", userName)
-				r.Header.Add("X-LoginUserName", defUserName)
-				r.Header.Add("X-LoginPassword", defUserPass)
+				r.Header.Add("X-AuthUserName", userName) //Так - фиктивными записями в header - передаём данные, чтобы не менять конструкции http.Request
+				r.Header.Add("X-LoginUserName", authNTLMDBUserName)
+				r.Header.Add("X-LoginPassword", authNTLMDBUserPass)
 
 				isSpecial, connStr := getConnectionParams(userName, grps)
 				if connStr == "" {

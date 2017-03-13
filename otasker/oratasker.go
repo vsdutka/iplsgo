@@ -87,6 +87,7 @@ type oracleTasker struct {
 	connUserPass        string
 	connStr             string
 	sessID              string
+	authUserName        string
 	logRequestProceeded int
 	logErrorsNum        int
 	logSessionID        string
@@ -205,6 +206,9 @@ func (r *oracleTasker) Run(sessionID, taskID, authUserName, oraUserName, oraUser
 
 	bg := time.Now()
 	//var needDisconnect bool
+
+	r.authUserName = authUserName
+
 	var res = OracleTaskResult{}
 	if err := r.connect(oraUserName, oraUserPass, oraConnStr); err != nil {
 		res.StatusCode, res.Content /*needDisconnect*/, _ = packError(err)
@@ -640,8 +644,15 @@ func (r *oracleTasker) run(res *OracleTaskResult, paramStoreProc, beforeScript, 
 	pnVar.SetValue(0, pkgName)
 	sqlParams["package_name"] = pnVar
 
-	stepStm := fmt.Sprintf(r.stmMain, stmExecDeclarePart.String(), stmExecSetPart.String(), beforeScript, stmExecStoreInContext.String(), procName, stmExecProcParams.String(), afterScript)
-	stepStmForShowing := fmt.Sprintf(r.stmMain, stmShowDeclarePart.String(), stmShowSetPart.String(), beforeScript, stmShowStoreInContext.String(), procName, stmShowProcParams.String(), afterScript)
+	var stmSetAuthUser string
+	if r.authUserName != r.connUserName {
+		stmSetAuthUser = `
+  A2.UAPI.e_Set_User('` + r.authUserName + `');
+ `
+	}
+
+	stepStm := fmt.Sprintf(r.stmMain, stmExecDeclarePart.String(), stmSetAuthUser, stmExecSetPart.String(), beforeScript, stmExecStoreInContext.String(), procName, stmExecProcParams.String(), afterScript)
+	stepStmForShowing := fmt.Sprintf(r.stmMain, stmShowDeclarePart.String(), stmSetAuthUser, stmShowSetPart.String(), beforeScript, stmShowStoreInContext.String(), procName, stmShowProcParams.String(), afterScript)
 	stepStmParams := sqlParams
 
 	r.setStepInfo(stepRunNum, stepStm, stepStmForShowing, false)

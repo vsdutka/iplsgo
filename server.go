@@ -278,6 +278,8 @@ func parseConfig(buf []byte) error {
 						c.Handlers[k].RequestUserRealm,
 						c.Handlers[k].DefUserName,
 						c.Handlers[k].DefUserPass,
+						c.Handlers[k].AuthNTLMDBUserName,
+						c.Handlers[k].AuthNTLMDBUserPass,
 						grps,
 						newOwa(upath, typeTasker,
 							time.Duration(c.Handlers[k].SessionIdleTimeout)*time.Millisecond,
@@ -562,7 +564,9 @@ type serverConfigHolder struct {
 		RedirectPath       string `json:"RedirectPath"`
 		SessionIdleTimeout int    `json:"owa.SessionIdleTimeout"`
 		SessionWaitTimeout int    `json:"owa.SessionWaitTimeout"`
-		AuthType           int    `json:"owa.AuthType"`
+		AuthType           int    `json:"owa.AuthenticationMethod"`
+		AuthNTLMDBUserName string `json:"owa.AuthNTLMDBUserName"`
+		AuthNTLMDBUserPass string `json:"owa.AuthNTLMDBUserPass"`
 		RequestUserRealm   string `json:"owa.ReqUserRealm"`
 		DefUserName        string `json:"owa.DBUserName"`
 		DefUserPass        string `json:"owa.DBUserPass"`
