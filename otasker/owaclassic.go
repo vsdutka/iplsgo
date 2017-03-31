@@ -27,6 +27,7 @@ Declare
   l_package_name varchar(240);
 %s
 Begin
+%s 
   /* >> Инициализация параметров */
 %s
   /* << Инициализация параметров */
@@ -50,11 +51,11 @@ Begin
       if l_doc_info='ЕКБ' then
         null;
       elsif l_doc_info='B' then
-        hrslt.GET_INFO(:ContentType ,:ContentLength,:CustomHeaders);
+        A.hrslt.GET_INFO(:ContentType ,:ContentLength,:CustomHeaders);
         wpg_docload.get_download_blob(l_lob);
         :lob__ := l_lob;
       elsif l_doc_info='F' then
-        hrslt.GET_INFO(:ContentType ,:ContentLength,:CustomHeaders);
+        A.hrslt.GET_INFO(:ContentType ,:ContentLength,:CustomHeaders);
         wpg_docload.get_download_bfile(l_bfile);
         DBMS_LOB.LOADFROMFILE(l_lob, l_bfile, DBMS_LOB.getLength(l_bfile));
         :lob__ := l_lob;
@@ -103,8 +104,8 @@ Begin
   else
     rc__ := 0;
     commit;
-    hrslt.GET_INFO(:ContentType ,:ContentLength,:CustomHeaders);
-    :content__ := hrslt.GET32000(:bNextChunkExists);
+    A.hrslt.GET_INFO(:ContentType ,:ContentLength,:CustomHeaders);
+    :content__ := A.hrslt.GET32000(:bNextChunkExists);
     if :bNextChunkExists = 0 then
       dbms_session.modify_package_state(dbms_session.reinitialize);
     end if;
@@ -123,7 +124,7 @@ exception
 end;`
 
 	classicGetRestChunk = `begin
-  :Data:=hrslt.GET32000(:bNextChunkExists);
+  :Data:=A.hrslt.GET32000(:bNextChunkExists);
   if :bNextChunkExists = 0 then
     dbms_session.modify_package_state(dbms_session.reinitialize);
   end if;

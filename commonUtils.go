@@ -7,7 +7,7 @@ import (
 	//"net/url"
 	"strings"
 
-	"code.google.com/p/go-uuid/uuid"
+	"github.com/pborman/uuid"
 	"github.com/vsdutka/iplsgo/otasker"
 )
 
