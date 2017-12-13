@@ -40,10 +40,9 @@ type OracleTaskResult struct {
 type OracleTasker interface {
 	Run(sessionID,
 		taskID,
-		authUserName,
-		oraUserName,
-		oraUserPass,
-		oraConnStr,
+		userName,
+		userPass,
+		connStr,
 		paramStoreProc,
 		beforeScript,
 		afterScript,
@@ -87,7 +86,6 @@ type oracleTasker struct {
 	connUserPass        string
 	connStr             string
 	sessID              string
-	authUserName        string
 	logRequestProceeded int
 	logErrorsNum        int
 	logSessionID        string
@@ -166,7 +164,7 @@ func (r *oracleTasker) CloseAndFree() error {
 	return nil
 }
 
-func (r *oracleTasker) Run(sessionID, taskID, authUserName, oraUserName, oraUserPass, oraConnStr,
+func (r *oracleTasker) Run(sessionID, taskID, userName, userPass, connStr,
 	paramStoreProc, beforeScript, afterScript, documentTable string,
 	cgiEnv map[string]string, procName string, urlParams url.Values,
 	reqFiles *mltpart.Form, dumpErrorFileName string) OracleTaskResult {
@@ -180,9 +178,9 @@ func (r *oracleTasker) Run(sessionID, taskID, authUserName, oraUserName, oraUser
 		r.logRequestProceeded++
 		r.logSessionID = sessionID
 		r.logTaskID = taskID
-		r.logUserName = oraUserName
-		r.logUserPass = oraUserPass
-		r.logConnStr = oraConnStr
+		r.logUserName = userName
+		r.logUserPass = userPass
+		r.logConnStr = connStr
 		r.logProcName = procName
 		r.stateIsWorking = true
 	}()
@@ -206,14 +204,11 @@ func (r *oracleTasker) Run(sessionID, taskID, authUserName, oraUserName, oraUser
 
 	bg := time.Now()
 	//var needDisconnect bool
-
-	r.authUserName = authUserName
-
 	var res = OracleTaskResult{}
-	if err := r.connect(oraUserName, oraUserPass, oraConnStr); err != nil {
+	if err := r.connect(userName, userPass, connStr); err != nil {
 		res.StatusCode, res.Content /*needDisconnect*/, _ = packError(err)
 		// Формируем дамп до закрытия соединения, чтобы получить корректный запрос из последнего шага
-		r.dumpError(oraUserName, oraConnStr, dumpErrorFileName, err)
+		r.dumpError(userName, connStr, dumpErrorFileName, err)
 
 		//Если произошла ошибка, всегда закрываем соединение с БД
 		r.disconnect()
@@ -231,7 +226,7 @@ func (r *oracleTasker) Run(sessionID, taskID, authUserName, oraUserName, oraUser
 		cgiEnv, procName, urlParams, reqFiles); err != nil {
 		res.StatusCode, res.Content /*needDisconnect*/, _ = packError(err)
 		// Формируем дамп до закрытия соединения, чтобы получить корректный запрос из последнего шага
-		r.dumpError(oraUserName, oraConnStr, dumpErrorFileName, err)
+		r.dumpError(userName, connStr, dumpErrorFileName, err)
 
 		//Если произошла ошибка, всегда закрываем соединение с БД
 		r.disconnect()
@@ -353,15 +348,6 @@ func (r *oracleTasker) run(res *OracleTaskResult, paramStoreProc, beforeScript, 
   l_package_name := :package_name;
 `
 	)
-	err := func() error {
-		r.openStep(stepDescribeNum, "Describe")
-		defer r.closeStep(stepDescribeNum)
-		return Describe(r.conn, r.connStr, procName)
-
-	}()
-	if err != nil {
-		return err
-	}
 
 	var (
 		numParamsVar        *oracle.Variable
@@ -399,9 +385,15 @@ func (r *oracleTasker) run(res *OracleTaskResult, paramStoreProc, beforeScript, 
 
 	stmExecSetPart.WriteString(initParams)
 
+	procNameParts := strings.Split(procName, "/")
+	if len(procNameParts) > 1 {
+		cgiEnv["X-APEX-BASE"] = "/" + procNameParts[0]
+	}
+
 	numParams := int32(len(cgiEnv))
 
 	var (
+		err             error
 		paramNameMaxLen int
 		paramValMaxLen  int
 	)
@@ -505,103 +497,169 @@ func (r *oracleTasker) run(res *OracleTaskResult, paramStoreProc, beforeScript, 
 		extParamValueMaxLen int
 	)
 
-	if reqFiles != nil {
-		for paramName, paramValue := range reqFiles.File {
-			fileName, err := r.saveFile(paramStoreProc, beforeScript, afterScript, documentTable,
-				cgiEnv, urlParams, paramValue)
-			if err != nil {
-				return err
-			}
+	if len(procNameParts) > 1 {
+		//Получение ресурсов новым способом
+		procName = "get_resource"
 
-			paramType, paramTypeName, _ := ArgumentInfo(r.connStr, procName, paramName)
+		module := procNameParts[0] + "/" + procNameParts[1] + "/"
+		method := cgiEnv["REQUEST_METHOD"]
+		url := strings.Join(procNameParts[2:], "/")
 
-			err = prepareParam(cur, sqlParams,
-				paramName, fileName,
-				paramType, paramTypeName,
-				paramStoreProc,
-				&stmExecDeclarePart, &stmShowDeclarePart,
-				&stmExecSetPart, &stmShowSetPart,
-				&stmExecProcParams, &stmShowProcParams,
-				&stmExecStoreInContext, &stmShowStoreInContext)
-			if err != nil {
-				return err
-			}
+		if err := prepareStringParam(cur, sqlParams, "amodule", []string{module},
+			"varchar2", "",
+			&stmExecDeclarePart, &stmShowDeclarePart,
+			&stmExecSetPart, &stmShowSetPart,
+			&stmExecProcParams, &stmShowProcParams,
+			&stmExecStoreInContext, &stmShowStoreInContext); err != nil {
+			return err
+		}
+		if err := prepareStringParam(cur, sqlParams, "amethod", []string{method},
+			"varchar2", "",
+			&stmExecDeclarePart, &stmShowDeclarePart,
+			&stmExecSetPart, &stmShowSetPart,
+			&stmExecProcParams, &stmShowProcParams,
+			&stmExecStoreInContext, &stmShowStoreInContext); err != nil {
+			return err
+		}
+		if err := prepareStringParam(cur, sqlParams, "aurl", []string{url},
+			"varchar2", "",
+			&stmExecDeclarePart, &stmShowDeclarePart,
+			&stmExecSetPart, &stmShowSetPart,
+			&stmExecProcParams, &stmShowProcParams,
+			&stmExecStoreInContext, &stmShowStoreInContext); err != nil {
+			return err
+		}
+		pkgName := ""
+		var pnVar *oracle.Variable
+		pnVar, err = cur.NewVariable(0, oracle.StringVarType, 80)
+		if err != nil {
+			return errgo.Newf("error creating variable for %s(%T): %s", "package_name", "varchar2", err)
+		}
+		pnVar.SetValue(0, pkgName)
+		sqlParams["package_name"] = pnVar
 
-			extParamName = append(extParamName, paramName)
-			extParamValue = append(extParamValue, fileName[0])
+	} else {
 
-			if len(fileName[0]) > extParamValueMaxLen {
-				extParamValueMaxLen = len(fileName[0])
+		err := func() error {
+			r.openStep(stepDescribeNum, "Describe")
+			defer r.closeStep(stepDescribeNum)
+			return Describe(r.conn, r.connStr, procName)
+
+		}()
+		if err != nil {
+			return err
+		}
+
+		if reqFiles != nil {
+			for paramName, paramValue := range reqFiles.File {
+				fileName, err := r.saveFile(paramStoreProc, beforeScript, afterScript, documentTable,
+					cgiEnv, urlParams, paramValue)
+				if err != nil {
+					return err
+				}
+
+				paramType, paramTypeName, _ := ArgumentInfo(r.connStr, procName, paramName)
+
+				err = prepareParam(cur, sqlParams,
+					paramName, fileName,
+					paramType, paramTypeName,
+					paramStoreProc,
+					&stmExecDeclarePart, &stmShowDeclarePart,
+					&stmExecSetPart, &stmShowSetPart,
+					&stmExecProcParams, &stmShowProcParams,
+					&stmExecStoreInContext, &stmShowStoreInContext)
+				if err != nil {
+					return err
+				}
+
+				extParamName = append(extParamName, paramName)
+				extParamValue = append(extParamValue, fileName[0])
+
+				if len(fileName[0]) > extParamValueMaxLen {
+					extParamValueMaxLen = len(fileName[0])
+				}
 			}
 		}
-	}
 
-	for paramName, paramValue := range urlParams {
-		paramName = strings.Trim(paramName, " ")
+		for paramName, paramValue := range urlParams {
+			paramName = strings.Trim(paramName, " ")
 
-		if paramName != "" {
-			paramType, paramTypeName, _ := ArgumentInfo(r.connStr, procName, paramName)
+			if paramName != "" {
+				paramType, paramTypeName, _ := ArgumentInfo(r.connStr, procName, paramName)
 
-			err = prepareParam(cur, sqlParams,
-				paramName, paramValue,
-				paramType, paramTypeName,
-				paramStoreProc,
-				&stmExecDeclarePart, &stmShowDeclarePart,
-				&stmExecSetPart, &stmShowSetPart,
-				&stmExecProcParams, &stmShowProcParams,
-				&stmExecStoreInContext, &stmShowStoreInContext)
-			if err != nil {
-				return err
-			}
+				err = prepareParam(cur, sqlParams,
+					paramName, paramValue,
+					paramType, paramTypeName,
+					paramStoreProc,
+					&stmExecDeclarePart, &stmShowDeclarePart,
+					&stmExecSetPart, &stmShowSetPart,
+					&stmExecProcParams, &stmShowProcParams,
+					&stmExecStoreInContext, &stmShowStoreInContext)
+				if err != nil {
+					return err
+				}
 
-			extParamName = append(extParamName, paramName)
-			extParamValue = append(extParamValue, paramValue[0])
+				extParamName = append(extParamName, paramName)
+				extParamValue = append(extParamValue, paramValue[0])
 
-			if len(paramName) > extParamNameMaxLen {
-				extParamNameMaxLen = len(paramName)
-			}
+				if len(paramName) > extParamNameMaxLen {
+					extParamNameMaxLen = len(paramName)
+				}
 
-			if len(paramValue[0]) > extParamValueMaxLen {
-				extParamValueMaxLen = len(paramValue[0])
+				if len(paramValue[0]) > extParamValueMaxLen {
+					extParamValueMaxLen = len(paramValue[0])
+				}
 			}
 		}
+		var pkgName string
+		_, pkgName, err = ProcedureInfo(r.connStr, procName)
+		if err != nil {
+			return err
+		}
+
+		var pnVar *oracle.Variable
+		pnVar, err = cur.NewVariable(0, oracle.StringVarType, 80)
+		if err != nil {
+			return errgo.Newf("error creating variable for %s(%T): %s", "package_name", "varchar2", err)
+		}
+		pnVar.SetValue(0, pkgName)
+		sqlParams["package_name"] = pnVar
+
+		//	if reqFiles != nil {
+		//		for paramName, paramValue := range reqFiles.File {
+		//			fileName, err := r.saveFile(paramStoreProc, beforeScript, afterScript, documentTable,
+		//				cgiEnv, urlParams, paramValue)
+		//			if err != nil {
+		//				return err
+		//			}
+		//			paramType, paramTypeName, _ := ArgumentInfo(r.connStr, procName, paramName)
+
+		//			fmt.Println("fileName = ", fileName)
+		//			fmt.Println("paramType = ", paramType)
+		//			fmt.Println("paramTypeName = ", paramTypeName)
+
+		//			err = prepareParam(cur, sqlParams,
+		//				paramName, fileName,
+		//				paramType, paramTypeName,
+		//				paramStoreProc,
+		//				&stmExecDeclarePart, &stmShowDeclarePart,
+		//				&stmExecSetPart, &stmShowSetPart,
+		//				&stmExecProcParams, &stmShowProcParams,
+		//				&stmExecStoreInContext, &stmShowStoreInContext)
+		//			if err != nil {
+		//				return err
+		//			}
+
+		//			extParamName = append(extParamName, paramName)
+		//			extParamValue = append(extParamValue, fileName[0])
+
+		//			if len(fileName[0]) > extParamValueMaxLen {
+		//				extParamValueMaxLen = len(fileName[0])
+		//			}
+
+		//		}
+		//	}
 	}
-
-	//	if reqFiles != nil {
-	//		for paramName, paramValue := range reqFiles.File {
-	//			fileName, err := r.saveFile(paramStoreProc, beforeScript, afterScript, documentTable,
-	//				cgiEnv, urlParams, paramValue)
-	//			if err != nil {
-	//				return err
-	//			}
-	//			paramType, paramTypeName, _ := ArgumentInfo(r.connStr, procName, paramName)
-
-	//			fmt.Println("fileName = ", fileName)
-	//			fmt.Println("paramType = ", paramType)
-	//			fmt.Println("paramTypeName = ", paramTypeName)
-
-	//			err = prepareParam(cur, sqlParams,
-	//				paramName, fileName,
-	//				paramType, paramTypeName,
-	//				paramStoreProc,
-	//				&stmExecDeclarePart, &stmShowDeclarePart,
-	//				&stmExecSetPart, &stmShowSetPart,
-	//				&stmExecProcParams, &stmShowProcParams,
-	//				&stmExecStoreInContext, &stmShowStoreInContext)
-	//			if err != nil {
-	//				return err
-	//			}
-
-	//			extParamName = append(extParamName, paramName)
-	//			extParamValue = append(extParamValue, fileName[0])
-
-	//			if len(fileName[0]) > extParamValueMaxLen {
-	//				extParamValueMaxLen = len(fileName[0])
-	//			}
-
-	//		}
-	//	}
-
 	stmExecSetPart.WriteString(fmt.Sprintf("  l_num_ext_params := %d;\n", int32(len(extParamName))))
 	stmShowSetPart.WriteString(fmt.Sprintf("  l_num_ext_params := %d;\n", int32(len(extParamName))))
 	for key, val := range extParamName {
@@ -630,29 +688,8 @@ func (r *oracleTasker) run(res *OracleTaskResult, paramStoreProc, beforeScript, 
 		return errgo.Newf("error creating variable for %s(%T): %s", "num_ext_params", "number", err)
 	}
 
-	var pkgName string
-	_, pkgName, err = ProcedureInfo(r.connStr, procName)
-	if err != nil {
-		return err
-	}
-
-	var pnVar *oracle.Variable
-	pnVar, err = cur.NewVariable(0, oracle.StringVarType, 80)
-	if err != nil {
-		return errgo.Newf("error creating variable for %s(%T): %s", "package_name", "varchar2", err)
-	}
-	pnVar.SetValue(0, pkgName)
-	sqlParams["package_name"] = pnVar
-
-	var stmSetAuthUser string
-	if r.authUserName != r.connUserName {
-		stmSetAuthUser = `
-  A2.UAPI.e_Set_User('` + r.authUserName + `');
- `
-	}
-
-	stepStm := fmt.Sprintf(r.stmMain, stmExecDeclarePart.String(), stmSetAuthUser, stmExecSetPart.String(), beforeScript, stmExecStoreInContext.String(), procName, stmExecProcParams.String(), afterScript)
-	stepStmForShowing := fmt.Sprintf(r.stmMain, stmShowDeclarePart.String(), stmSetAuthUser, stmShowSetPart.String(), beforeScript, stmShowStoreInContext.String(), procName, stmShowProcParams.String(), afterScript)
+	stepStm := fmt.Sprintf(r.stmMain, stmExecDeclarePart.String(), stmExecSetPart.String(), beforeScript, stmExecStoreInContext.String(), procName, stmExecProcParams.String(), afterScript)
+	stepStmForShowing := fmt.Sprintf(r.stmMain, stmShowDeclarePart.String(), stmShowSetPart.String(), beforeScript, stmShowStoreInContext.String(), procName, stmShowProcParams.String(), afterScript)
 	stepStmParams := sqlParams
 
 	r.setStepInfo(stepRunNum, stepStm, stepStmForShowing, false)
@@ -1274,56 +1311,52 @@ func prepareParam(
 	switch paramType {
 	case oString:
 		{
-			//value := removeCR(trimRightCRLF(paramValue[0]))
-			value := removeCR(paramValue[0])
+			return prepareStringParam(cur, params, paramName, paramValue,
+				paramTypeName, paramStoreProc,
+				stmExecDeclarePart, stmShowDeclarePart,
+				stmExecSetPart, stmShowSetPart,
+				stmExecProcParams, stmShowProcParams,
+				stmExecStoreInContext, stmShowStoreInContext)
+			//			value := removeCR(paramValue[0])
 
-			//			enc := charmap.Windows1251.NewEncoder()
-			//			// можно просто превратить строку
-			//			out := make([]byte, len(value))
-			//			_, _, err := enc.Transform(out, []byte(value), false)
-			//			if err != nil {
-			//				panic(err)
+			//			if lVar, err = cur.NewVariable(0, oracle.StringVarType, uint(len(value))); err != nil {
+			//				return errgo.Newf("error creating variable for %s(%T): %s", paramName, value, err)
 			//			}
-			//			fmt.Printf("%s = %X\n", paramName, out)
+			//			lVar.SetValue(0, value)
 
-			if lVar, err = cur.NewVariable(0, oracle.StringVarType, uint(len(value))); err != nil {
-				return errgo.Newf("error creating variable for %s(%T): %s", paramName, value, err)
-			}
-			lVar.SetValue(0, value)
+			//			params[paramName] = lVar
 
-			params[paramName] = lVar
+			//			// stmExecDeclarePart
+			//			iLen := len(value)
+			//			if iLen == 0 {
+			//				// Для того, чтобы избежать ситуации VARCHAR2(0);
+			//				iLen = iLen + 1
+			//			}
+			//			stmShowDeclarePart.WriteString(fmt.Sprintf("  l_%s %s(%d);\n", paramName, paramTypeName, iLen))
+			//			//stmExecSetPart,
+			//			stmShowSetPart.WriteString(fmt.Sprintf("  l_%s := '%s';\n", paramName, strings.Replace(value, "'", "''", -1)))
+			//			// Вызов процедуры - Формирование строки с параметрами для вызова процедуры
+			//			if stmExecProcParams.Len() != 0 {
+			//				stmExecProcParams.WriteString(", ")
+			//			}
+			//			stmExecProcParams.WriteString(fmt.Sprintf("%s => :%s", paramName, paramName))
 
-			// stmExecDeclarePart
-			iLen := len(value)
-			if iLen == 0 {
-				// Для того, чтобы избежать ситуации VARCHAR2(0);
-				iLen = iLen + 1
-			}
-			stmShowDeclarePart.WriteString(fmt.Sprintf("  l_%s %s(%d);\n", paramName, paramTypeName, iLen))
-			//stmExecSetPart,
-			stmShowSetPart.WriteString(fmt.Sprintf("  l_%s := '%s';\n", paramName, strings.Replace(value, "'", "''", -1)))
-			// Вызов процедуры - Формирование строки с параметрами для вызова процедуры
-			if stmExecProcParams.Len() != 0 {
-				stmExecProcParams.WriteString(", ")
-			}
-			stmExecProcParams.WriteString(fmt.Sprintf("%s => :%s", paramName, paramName))
+			//			// Отображение вызова процедуры - Формирование строки с параметрами для вызова процедуры
+			//			if stmShowProcParams.Len() != 0 {
+			//				stmShowProcParams.WriteString(", ")
+			//			}
+			//			stmShowProcParams.WriteString(fmt.Sprintf("%s => l_%s", paramName, paramName))
 
-			// Отображение вызова процедуры - Формирование строки с параметрами для вызова процедуры
-			if stmShowProcParams.Len() != 0 {
-				stmShowProcParams.WriteString(", ")
-			}
-			stmShowProcParams.WriteString(fmt.Sprintf("%s => l_%s", paramName, paramName))
-
-			// Добавление вызова сохранения параметра
-			if paramStoreProc != "" {
-				if lVar, err = cur.NewVar(&value); err != nil {
-					return errgo.Newf("error creating variable for %s(%T): %s", paramName, value, err)
-				}
-				params[paramName+"#"] = lVar
-				stmExecStoreInContext.WriteString(fmt.Sprintf("  %s('%s', :%s#);\n", paramStoreProc, strings.ToUpper(paramName), paramName))
-				stmShowStoreInContext.WriteString(fmt.Sprintf("  %s('%s', l_%s);\n", paramStoreProc, strings.ToUpper(paramName), paramName))
-			}
-			return nil
+			//			// Добавление вызова сохранения параметра
+			//			if paramStoreProc != "" {
+			//				if lVar, err = cur.NewVar(&value); err != nil {
+			//					return errgo.Newf("error creating variable for %s(%T): %s", paramName, value, err)
+			//				}
+			//				params[paramName+"#"] = lVar
+			//				stmExecStoreInContext.WriteString(fmt.Sprintf("  %s('%s', :%s#);\n", paramStoreProc, strings.ToUpper(paramName), paramName))
+			//				stmShowStoreInContext.WriteString(fmt.Sprintf("  %s('%s', l_%s);\n", paramStoreProc, strings.ToUpper(paramName), paramName))
+			//			}
+			//			return nil
 		}
 	case oNumber:
 		{
@@ -1728,4 +1761,62 @@ func addCR(val string) string {
 		i += wid
 	}
 	return string(out)
+}
+
+func prepareStringParam(
+	cur *oracle.Cursor, params map[string]interface{},
+	paramName string, paramValue []string,
+	paramTypeName string,
+	paramStoreProc string,
+	stmExecDeclarePart, stmShowDeclarePart,
+	stmExecSetPart, stmShowSetPart,
+	stmExecProcParams, stmShowProcParams,
+	stmExecStoreInContext, stmShowStoreInContext *bytes.Buffer,
+	/*
+		paramsForCall, paramsForStore bytes.Buffer*/) error {
+	var (
+		lVar *oracle.Variable
+		err  error
+	)
+
+	value := removeCR(paramValue[0])
+
+	if lVar, err = cur.NewVariable(0, oracle.StringVarType, uint(len(value))); err != nil {
+		return errgo.Newf("error creating variable for %s(%T): %s", paramName, value, err)
+	}
+	lVar.SetValue(0, value)
+
+	params[paramName] = lVar
+
+	// stmExecDeclarePart
+	iLen := len(value)
+	if iLen == 0 {
+		// Для того, чтобы избежать ситуации VARCHAR2(0);
+		iLen = iLen + 1
+	}
+	stmShowDeclarePart.WriteString(fmt.Sprintf("  l_%s %s(%d);\n", paramName, paramTypeName, iLen))
+	//stmExecSetPart,
+	stmShowSetPart.WriteString(fmt.Sprintf("  l_%s := '%s';\n", paramName, strings.Replace(value, "'", "''", -1)))
+	// Вызов процедуры - Формирование строки с параметрами для вызова процедуры
+	if stmExecProcParams.Len() != 0 {
+		stmExecProcParams.WriteString(", ")
+	}
+	stmExecProcParams.WriteString(fmt.Sprintf("%s => :%s", paramName, paramName))
+
+	// Отображение вызова процедуры - Формирование строки с параметрами для вызова процедуры
+	if stmShowProcParams.Len() != 0 {
+		stmShowProcParams.WriteString(", ")
+	}
+	stmShowProcParams.WriteString(fmt.Sprintf("%s => l_%s", paramName, paramName))
+
+	// Добавление вызова сохранения параметра
+	if paramStoreProc != "" {
+		if lVar, err = cur.NewVar(&value); err != nil {
+			return errgo.Newf("error creating variable for %s(%T): %s", paramName, value, err)
+		}
+		params[paramName+"#"] = lVar
+		stmExecStoreInContext.WriteString(fmt.Sprintf("  %s('%s', :%s#);\n", paramStoreProc, strings.ToUpper(paramName), paramName))
+		stmShowStoreInContext.WriteString(fmt.Sprintf("  %s('%s', l_%s);\n", paramStoreProc, strings.ToUpper(paramName), paramName))
+	}
+	return nil
 }

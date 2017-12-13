@@ -16,7 +16,6 @@ var numberOfSessions = metrics.NewInt("PersistentHandler_Number_Of_Sessions", "S
 type work struct {
 	sessionID         string
 	taskID            string
-	authUserName      string
 	reqUserName       string
 	reqUserPass       string
 	reqConnStr        string
@@ -97,7 +96,6 @@ func (w *worker) listen(path, ID string, idleTimeout time.Duration) {
 				res := func() OracleTaskResult {
 					return w.Run(wrk.sessionID,
 						wrk.taskID,
-						wrk.authUserName,
 						wrk.reqUserName,
 						wrk.reqUserPass,
 						wrk.reqConnStr,
@@ -153,10 +151,9 @@ func Run(
 	typeTasker int,
 	sessionID,
 	taskID,
-	authUserName,
-	oraUserName,
-	oraUserPass,
-	oraConnStr,
+	userName,
+	userPass,
+	connStr,
 	paramStoreProc,
 	beforeScript,
 	afterScript,
@@ -206,10 +203,9 @@ func Run(
 				wrk := work{
 					sessionID:         sessionID,
 					taskID:            taskID,
-					authUserName:      authUserName,
-					reqUserName:       oraUserName,
-					reqUserPass:       oraUserPass,
-					reqConnStr:        oraConnStr,
+					reqUserName:       userName,
+					reqUserPass:       userPass,
+					reqConnStr:        connStr,
 					reqParamStoreProc: paramStoreProc,
 					reqBeforeScript:   beforeScript,
 					reqAfterScript:    afterScript,

@@ -22,7 +22,6 @@ func getUserInfo(name string) (bool, int32, bool) {
 	}
 	return u.IsSpecial, u.GrpID, true
 }
-
 func getConnectionParams(user string, grps map[int32]string) (bool, string) {
 	if user == "" {
 		return false, ""

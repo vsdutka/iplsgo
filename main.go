@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/kardianos/service"
-	_ "golang.org/x/tools/go/ssa"
+	//_ "golang.org/x/tools/go/ssa"
 	"gopkg.in/goracle.v1/oracle"
 )
 
