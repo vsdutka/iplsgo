@@ -23,6 +23,9 @@ func makeHandlerID(isSpecial bool, userName, userPass, debugIP string, req *http
 		}
 	}
 	host, _, _ := net.SplitHostPort(addr)
+	if debugIP == "uuid" {
+		host = uuid.New()
+	}
 	return strings.ToUpper(userName + "|" + userPass + "|" + host + "|" + debugIP)
 }
 

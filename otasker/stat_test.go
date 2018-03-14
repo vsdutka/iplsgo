@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"testing"
 	"time"
+
+	"github.com/vsdutka/mltpart"
 )
 
 func prepareData(t *testing.T, vpath string) {
@@ -29,9 +31,9 @@ begin
 end;`, i),
 			procDrop:  fmt.Sprintf(`drop procedure TestWorkerRun%d`, i),
 			urlValues: url.Values{"ap": []string{"1"}},
-			files: &Form{
+			files: &mltpart.Form{
 				Value: map[string][]string{},
-				File:  map[string][]*FileHeader{},
+				File:  map[string][]*mltpart.FileHeader{},
 			},
 			waitTimeout:  10 * time.Second,
 			idleTimeout:  15 * time.Second,

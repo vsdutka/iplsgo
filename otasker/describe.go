@@ -2,12 +2,13 @@
 package otasker
 
 import (
-	"github.com/vsdutka/metrics"
-	"gopkg.in/errgo.v1"
-	"gopkg.in/goracle.v1/oracle"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/vsdutka/metrics"
+	"gopkg.in/errgo.v1"
+	"gopkg.in/goracle.v1/oracle"
 )
 
 var (
@@ -122,37 +123,37 @@ func Describe(conn *oracle.Connection, dbName, procedureName string) error {
 		defer curShort.Close()
 
 		if procedureNameVar, err = curShort.NewVar(&procedureName); err != nil {
-			return false, 0, errgo.Newf("error creating variable for %s(%T): %s", procedureName, procedureName, err)
+			return false, 0, errV(procedureName, procedureName, err)
 		}
 		defer procedureNameVar.Free()
 
 		if packageNameVar, err = curShort.NewVar(&packageName); err != nil {
-			return false, 0, errgo.Newf("error creating variable for %s(%T): %s", packageName, packageName, err)
+			return false, 0, errV(packageName, packageName, err)
 		}
 		defer packageNameVar.Free()
 
 		if parsedProcNameVar, err = curShort.NewVar(&parsedProcName); err != nil {
-			return false, 0, errgo.Newf("error creating variable for %s(%T): %s", parsedProcName, parsedProcName, err)
+			return false, 0, errV(parsedProcName, parsedProcName, err)
 		}
 		defer parsedProcNameVar.Free()
 
 		if objectIdVar, err = curShort.NewVar(&objectId); err != nil {
-			return false, 0, errgo.Newf("error creating variable for %s(%T): %s", objectId, objectId, err)
+			return false, 0, errV(objectId, objectId, err)
 		}
 		defer objectIdVar.Free()
 
 		if lastChangeTimeVar, err = curShort.NewVar(&timestamp); err != nil {
-			return false, 0, errgo.Newf("error creating variable for %s(%T): %s", timestamp, timestamp, err)
+			return false, 0, errV(timestamp, timestamp, err)
 		}
 		defer lastChangeTimeVar.Free()
 
 		if updatedVar, err = curShort.NewVar(&updated); err != nil {
-			return false, 0, errgo.Newf("error creating variable for %s(%T): %s", updated, updated, err)
+			return false, 0, errV(updated, updated, err)
 		}
 		defer updatedVar.Free()
 
 		if arrayLenVar, err = curShort.NewVar(&arrayLen); err != nil {
-			return false, 0, errgo.Newf("error creating variable for %s(%T): %s", arrayLen, arrayLen, err)
+			return false, 0, errV(arrayLen, arrayLen, err)
 		}
 		defer arrayLenVar.Free()
 

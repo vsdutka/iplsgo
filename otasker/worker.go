@@ -87,6 +87,8 @@ func (w *worker) listen(path, ID string, idleTimeout time.Duration) {
 		numberOfSessions.Add(-1)
 	}()
 
+	timer := acquireTimer(idleTimeout)
+	defer releaseTimer(timer)
 	for {
 		select {
 		case wrk := <-w.inChan:
@@ -119,7 +121,7 @@ func (w *worker) listen(path, ID string, idleTimeout time.Duration) {
 				}
 
 			}
-		case <-time.After(idleTimeout):
+		case <-timer.C: //<-time.After(idleTimeout):
 			{
 				return
 			}
@@ -195,6 +197,8 @@ func Run(
 	// Проверяем, если результаты по задаче
 	outChan, ok := w.outChan(taskID)
 	if !ok {
+		timer := acquireTimer(waitTimeout)
+		defer releaseTimer(timer)
 		//Если еще не было отправки, то проверяем на то, что можно отправит
 		select {
 		case <-w.signalChan:
@@ -223,7 +227,7 @@ func Run(
 				w.inChan <- wrk
 
 			}
-		case <-time.After(waitTimeout):
+		case <-timer.C: //<-time.After(waitTimeout):
 			{
 				/* Сигнализируем о том, что идет выполнение другог запроса и нужно предложить прервать */
 				return OracleTaskResult{StatusCode: StatusBreakPage, Duration: w.worked()}
@@ -232,13 +236,15 @@ func Run(
 	}
 	//Читаем результаты
 	return func() OracleTaskResult {
+		timer := acquireTimer(waitTimeout)
+		defer releaseTimer(timer)
 		select {
 		case res := <-outChan:
 			w.Lock()
 			delete(w.outChanList, taskID)
 			w.Unlock()
 			return res
-		case <-time.After(waitTimeout):
+		case <-timer.C: //<-time.After(waitTimeout):
 			{
 				/* Сигнализируем о том, что идет выполнение этого запроса и нужно показать червяка */
 				return OracleTaskResult{StatusCode: StatusWaitPage, Duration: w.worked()}

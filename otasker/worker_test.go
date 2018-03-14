@@ -2,11 +2,17 @@
 package otasker
 
 import (
+	//	"fmt"
+	//	"net/http"
+	//	"net/http/httptest"
+	//	"net/http/pprof"
 	"net/url"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/vsdutka/mltpart"
 )
 
 type test struct {
@@ -21,7 +27,7 @@ type test struct {
 	procCreate   string
 	procDrop     string
 	urlValues    url.Values
-	files        *Form
+	files        *mltpart.Form
 	waitTimeout  time.Duration
 	idleTimeout  time.Duration
 	afterTimeout time.Duration
@@ -100,9 +106,9 @@ CUSTOM_HEADER1: HEADER1
 end;`,
 			procDrop:  `drop procedure TestWorkerRun`,
 			urlValues: url.Values{"ap": []string{"1"}},
-			files: &Form{
+			files: &mltpart.Form{
 				Value: map[string][]string{},
-				File:  map[string][]*FileHeader{},
+				File:  map[string][]*mltpart.FileHeader{},
 			},
 			waitTimeout:  10 * time.Second,
 			idleTimeout:  2 * time.Second,
@@ -132,9 +138,9 @@ end;`,
 		end;`,
 			procDrop:  `drop procedure TestWorkerRun`,
 			urlValues: url.Values{"ap": []string{"1"}},
-			files: &Form{
+			files: &mltpart.Form{
 				Value: map[string][]string{},
-				File:  map[string][]*FileHeader{},
+				File:  map[string][]*mltpart.FileHeader{},
 			},
 			waitTimeout:  10 * time.Second,
 			idleTimeout:  1 * time.Second,
@@ -154,9 +160,9 @@ end;`,
 			procCreate: "begin execute immediate 'create user \"TEST001\" identified by \"1\" account lock'; execute immediate 'grant connect to TEST001'; end;",
 			procDrop:   "drop user \"TEST001\"",
 			urlValues:  url.Values{},
-			files: &Form{
+			files: &mltpart.Form{
 				Value: map[string][]string{},
-				File:  map[string][]*FileHeader{},
+				File:  map[string][]*mltpart.FileHeader{},
 			},
 			waitTimeout:  10 * time.Second,
 			idleTimeout:  1 * time.Second,
@@ -187,9 +193,9 @@ CUSTOM_HEADER1: HEADER1
 end;`,
 			procDrop:  ``,
 			urlValues: url.Values{"ap": []string{"1"}},
-			files: &Form{
+			files: &mltpart.Form{
 				Value: map[string][]string{},
-				File:  map[string][]*FileHeader{},
+				File:  map[string][]*mltpart.FileHeader{},
 			},
 			waitTimeout:  10 * time.Second,
 			idleTimeout:  1 * time.Second,
@@ -209,9 +215,9 @@ end;`,
 			procCreate: ``,
 			procDrop:   ``,
 			urlValues:  url.Values{"ap": []string{"1"}},
-			files: &Form{
+			files: &mltpart.Form{
 				Value: map[string][]string{},
-				File:  map[string][]*FileHeader{},
+				File:  map[string][]*mltpart.FileHeader{},
 			},
 			waitTimeout:  10 * time.Second,
 			idleTimeout:  1 * time.Second,
@@ -231,9 +237,9 @@ end;`,
 			procCreate: ``,
 			procDrop:   ``,
 			urlValues:  url.Values{"ap": []string{"1"}},
-			files: &Form{
+			files: &mltpart.Form{
 				Value: map[string][]string{},
-				File:  map[string][]*FileHeader{},
+				File:  map[string][]*mltpart.FileHeader{},
 			},
 			waitTimeout:  10 * time.Second,
 			idleTimeout:  1 * time.Second,
@@ -251,11 +257,11 @@ end;`,
 			connStr:    dsn_sid,
 			procName:   "TestWorkerRun",
 			procCreate: ``,
-			procDrop:   `drop procedure TestWorkerRun`,
+			procDrop:   ``,
 			urlValues:  url.Values{"ap": []string{"1"}},
-			files: &Form{
+			files: &mltpart.Form{
 				Value: map[string][]string{},
-				File:  map[string][]*FileHeader{},
+				File:  map[string][]*mltpart.FileHeader{},
 			},
 			waitTimeout:  1 * time.Second,
 			idleTimeout:  1 * time.Second,
@@ -273,11 +279,11 @@ end;`,
 			connStr:    dsn_sid,
 			procName:   "TestWorkerRun",
 			procCreate: ``,
-			procDrop:   ``,
+			procDrop:   `drop procedure TestWorkerRun`,
 			urlValues:  url.Values{"ap": []string{"1"}},
-			files: &Form{
+			files: &mltpart.Form{
 				Value: map[string][]string{},
-				File:  map[string][]*FileHeader{},
+				File:  map[string][]*mltpart.FileHeader{},
 			},
 			waitTimeout:  10 * time.Second,
 			idleTimeout:  1 * time.Second,
@@ -329,9 +335,9 @@ CUSTOM_HEADER1: HEADER1
 end;`,
 			procDrop:  ``,
 			urlValues: url.Values{"ap": []string{"1"}},
-			files: &Form{
+			files: &mltpart.Form{
 				Value: map[string][]string{},
-				File:  map[string][]*FileHeader{},
+				File:  map[string][]*mltpart.FileHeader{},
 			},
 			waitTimeout:  10 * time.Second,
 			idleTimeout:  1 * time.Second,
@@ -357,3 +363,86 @@ end;`,
 	}()
 	wg.Wait()
 }
+
+//func TestWorkerTimerUsage(t *testing.T) {
+//	var vpath = strings.ToUpper("TestWorkerTimerUsage")
+//	var wg sync.WaitGroup
+//	wg.Add(2)
+//	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//		if strings.HasPrefix(r.URL.Path, "/debug/pprof/") {
+//			pprof.Index(w, r)
+//			return
+//		}
+//		switch r.URL.Path {
+//		case "/q":
+//			wg.Done()
+//		case "/debug/pprof/":
+//			pprof.Index(w, r)
+//		case "/debug/pprof/cmdline":
+//			pprof.Cmdline(w, r)
+//		case "/debug/pprof/profile":
+//			pprof.Profile(w, r)
+//		case "/debug/pprof/symbol":
+//			pprof.Symbol(w, r)
+//		case "/debug/pprof/trace":
+//			pprof.Trace(w, r)
+//		}
+//		fmt.Println(r.URL.Path)
+//	}))
+//	defer ts.Close()
+//	fmt.Println(ts.URL)
+//	var tests = []test{
+//		{
+//			name:       "Длинный запрос 1 - червяк",
+//			path:       vpath,
+//			sessionID:  "sess4",
+//			taskID:     "TASK4",
+//			userName:   dsn_user,
+//			userPass:   dsn_passw,
+//			connStr:    dsn_sid,
+//			procName:   "TestWorkerRun",
+//			procCreate: createLongProc,
+//			procDrop:   ``,
+//			urlValues:  url.Values{"ap": []string{"1"}},
+//			files: &mltpart.Form{
+//				Value: map[string][]string{},
+//				File:  map[string][]*mltpart.FileHeader{},
+//			},
+//			waitTimeout:  10 * time.Second,
+//			idleTimeout:  1 * time.Second,
+//			afterTimeout: 0 * time.Second,
+//			resCode:      StatusWaitPage,
+//			resContent:   "",
+//		},
+//	}
+
+//	for _, v := range tests {
+//		workerRun(t, v)
+//	}
+//	wg.Wait()
+//	fmt.Println("after wait")
+//	wlock.Lock()
+//	if len(wlist[vpath]) > 0 {
+//		for k, _ := range wlist[vpath] {
+//			t.Log(k)
+//		}
+//		t.Fatalf("len(wlist[vpath]) = %d", len(wlist[vpath]))
+//	}
+//	wlock.Unlock()
+
+//}
+
+//const (
+//	createLongProc = `
+//create or replace procedure TestWorkerRun(ap in varchar2) is
+//begin
+//  htp.set_ContentType('text/plain');
+//  htp.add_CustomHeader('CUSTOM_HEADER: HEADER
+//CUSTOM_HEADER1: HEADER1
+//');
+//  htp.prn(ap);
+//  hrslt.ADD_FOOTER := false;
+//  dbms_lock.sleep(15);
+//  rollback;
+//end;`
+//)

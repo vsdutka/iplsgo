@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vsdutka/mltpart"
 	"gopkg.in/errgo.v1"
 	"gopkg.in/goracle.v1/oracle"
 )
@@ -43,7 +44,7 @@ begin
   r:=dbms_sql.execute(f);
   dbms_sql.close_cursor(f);
   f:=dbms_sql.open_cursor;
-  dbms_sql.parse(f,'ALTER SESSION SET NLS_NUMERIC_CHARACTERS='||CHR(39)||', '||CHR(39),1);
+  dbms_sql.parse(f,'ALTER SESSION SET NLS_NUMERIC_CHARACTERS='||CHR(39)||'. '||CHR(39),1);
   r:=dbms_sql.execute(f);
   dbms_sql.close_cursor(f);
 end;`
@@ -107,7 +108,7 @@ func TestTaskerReconnect(t *testing.T) {
 	}
 }
 
-func run_p(t *testing.T, procName, paramType string, paramValue []string, reqFiles *Form, result string) {
+func run_p(t *testing.T, procName, paramType string, paramValue []string, reqFiles *mltpart.Form, result string) {
 	const (
 		stm_create_pkg = `
 create or replace package pkg_types is
@@ -119,7 +120,7 @@ end;`
 		stm_create_p = `
 create or replace procedure %s(ap in %s) is 
 begin
-  htp.set_ContentType('text/plain');
+  htp.set_ContentType('text/plain; charset=utf-8');
   htp.add_CustomHeader('CUSTOM_HEADER: HEADER
 CUSTOM_HEADER1: HEADER1
 ');
@@ -163,16 +164,18 @@ end;`
 		stm_init, "session_final.final;", "wwv_document", cgi,
 		procName, urlParams, reqFiles, ".\\log.log")
 	if r.StatusCode != 200 {
+		t.Log(procName)
+		t.Log(urlParams)
 		t.Log(string(r.Content))
 		t.Fatalf("%s - StatusCode - got %v,\nwant %v", paramType, r.StatusCode, 200)
 	}
 	if string(r.Content) != result {
 		t.Fatalf("%s - Content - got %v,\nwant %v", paramType, string(r.Content), result)
 	}
-	if r.ContentType != "text/plain" {
-		t.Fatalf("%s - ContentType - got %v,\nwant %v", paramType, r.ContentType, "text/plain")
+	if r.ContentType != "text/plain; charset=utf-8" {
+		t.Fatalf("%s - ContentType - got %v,\nwant %v", paramType, r.ContentType, "text/plain; charset=utf-8")
 	}
-	if r.Headers != "CUSTOM_HEADER: HEADER\nCUSTOM_HEADER1: HEADER1\n" {
+	if !((r.Headers.Get("CUSTOM_HEADER") == "HEADER") && (r.Headers.Get("CUSTOM_HEADER1") == "HEADER1")) {
 		t.Fatalf("%s - Headers - got %v,\nwant %v", paramType, r.Headers, "CUSTOM_HEADER: HEADER\nCUSTOM_HEADER1: HEADER1\n")
 	}
 
@@ -192,16 +195,16 @@ func TestTaskerRun(t *testing.T) {
 			procName    string
 			paramType   string
 			paramValues []string
-			reqFiles    *Form
+			reqFiles    *mltpart.Form
 			result      string
 		}{
 			{
 				procName:    "test_run_p1",
 				paramType:   "varchar2",
 				paramValues: []string{"test"},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File:  map[string][]*FileHeader{},
+					File:  map[string][]*mltpart.FileHeader{},
 				},
 				result: "test",
 			},
@@ -209,19 +212,19 @@ func TestTaskerRun(t *testing.T) {
 				procName:    "test_run_p2",
 				paramType:   "number",
 				paramValues: []string{"123.5"},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File:  map[string][]*FileHeader{},
+					File:  map[string][]*mltpart.FileHeader{},
 				},
-				result: "123,5",
+				result: "123.5",
 			},
 			{
 				procName:    "test_run_p2",
 				paramType:   "number",
-				paramValues: []string{"123,5"},
-				reqFiles: &Form{
+				paramValues: []string{"1235"},
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File:  map[string][]*FileHeader{},
+					File:  map[string][]*mltpart.FileHeader{},
 				},
 				result: "1235",
 			},
@@ -229,9 +232,9 @@ func TestTaskerRun(t *testing.T) {
 				procName:    "test_run_p2",
 				paramType:   "number",
 				paramValues: []string{""},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File:  map[string][]*FileHeader{},
+					File:  map[string][]*mltpart.FileHeader{},
 				},
 				result: "",
 			},
@@ -239,9 +242,9 @@ func TestTaskerRun(t *testing.T) {
 				procName:    "test_run_p2",
 				paramType:   "number",
 				paramValues: []string{"-1"},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File:  map[string][]*FileHeader{},
+					File:  map[string][]*mltpart.FileHeader{},
 				},
 				result: "-1",
 			},
@@ -249,9 +252,9 @@ func TestTaskerRun(t *testing.T) {
 				procName:    "test_run_p3",
 				paramType:   "integer",
 				paramValues: []string{"5"},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File:  map[string][]*FileHeader{},
+					File:  map[string][]*mltpart.FileHeader{},
 				},
 				result: "5",
 			},
@@ -259,9 +262,9 @@ func TestTaskerRun(t *testing.T) {
 				procName:    "test_run_p3",
 				paramType:   "integer",
 				paramValues: []string{"-15"},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File:  map[string][]*FileHeader{},
+					File:  map[string][]*mltpart.FileHeader{},
 				},
 				result: "-15",
 			},
@@ -276,9 +279,9 @@ func TestTaskerRun(t *testing.T) {
 				procName:    "test_run_p5",
 				paramType:   "owa.vc_arr",
 				paramValues: []string{"s1", "s2", "s3"},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File:  map[string][]*FileHeader{},
+					File:  map[string][]*mltpart.FileHeader{},
 				},
 				result: "s1s2s3",
 			},
@@ -286,19 +289,19 @@ func TestTaskerRun(t *testing.T) {
 				procName:    "test_run_p6",
 				paramType:   "sys.dbms_describe.number_table",
 				paramValues: []string{"100.456", "534534534.234200"},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File:  map[string][]*FileHeader{},
+					File:  map[string][]*mltpart.FileHeader{},
 				},
-				result: "100,456534534534,2342",
+				result: "100.456534534534.2342",
 			},
 			{
 				procName:    "test_run_p7",
 				paramType:   "pkg_types.tinteger_table",
 				paramValues: []string{"100", "500"},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File:  map[string][]*FileHeader{},
+					File:  map[string][]*mltpart.FileHeader{},
 				},
 				result: "100500",
 			},
@@ -308,9 +311,9 @@ func TestTaskerRun(t *testing.T) {
 				paramValues: []string{time.Date(2015, 12, 21, 9, 50, 0, 0, time.Local).Format(time.RFC3339),
 					time.Date(2017, 12, 21, 9, 0, 0, 0, time.Local).Format(time.RFC3339),
 					time.Date(2015, 12, 01, 9, 0, 0, 0, time.Local).Format(time.RFC3339)},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File:  map[string][]*FileHeader{},
+					File:  map[string][]*mltpart.FileHeader{},
 				},
 				result: "21/12/2015 09:5021/12/2017 09:0001/12/2015 09:00",
 			},
@@ -318,19 +321,23 @@ func TestTaskerRun(t *testing.T) {
 				procName:    "test_run_file_upload",
 				paramType:   "varchar2",
 				paramValues: []string{},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File: map[string][]*FileHeader{"ap": []*FileHeader{
-						&FileHeader{
-							Filename: "test_file.txt1",
-							Header: textproto.MIMEHeader{
-								"Content-Disposition": []string{"filename=\"test_file_1.txt\""},
-								"Content-Type":        []string{"text/html"},
-							},
-							content: []byte{1, 2, 3, 4, 5, 6, 7, 8},
-							tmpfile: "",
-							lastArg: "",
-						},
+					File: map[string][]*mltpart.FileHeader{"ap": []*mltpart.FileHeader{
+						mltpart.NewFileHeader("test_file.txt1", textproto.MIMEHeader{
+							"Content-Disposition": []string{"filename=\"test_file_1.txt\""},
+							"Content-Type":        []string{"text/html"},
+						}, []byte{1, 2, 3, 4, 5, 6, 7, 8}),
+						//						&mltpart.FileHeader{
+						//							Filename: "test_file.txt1",
+						//							Header: textproto.MIMEHeader{
+						//								"Content-Disposition": []string{"filename=\"test_file_1.txt\""},
+						//								"Content-Type":        []string{"text/html"},
+						//							},
+						//							//content: []byte{1, 2, 3, 4, 5, 6, 7, 8},
+						//							//tmpfile: "",
+						//							LastArg: "",
+						//						},
 					}},
 				},
 				result: "test_file_1.txt",
@@ -339,30 +346,38 @@ func TestTaskerRun(t *testing.T) {
 				procName:    "test_run_file_upload_2",
 				paramType:   "owa.vc_arr",
 				paramValues: []string{},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File: map[string][]*FileHeader{
-						"ap": []*FileHeader{
-							&FileHeader{
-								Filename: "test_file.txt1",
-								Header: textproto.MIMEHeader{
-									"Content-Disposition": []string{"filename=\"test_file_1.txt\""},
-									"Content-Type":        []string{"text/html"},
-								},
-								content: []byte{1, 2, 3, 4, 5, 6, 7, 8},
-								tmpfile: "",
-								lastArg: "",
-							},
-							&FileHeader{
-								Filename: "test_file.txt1",
-								Header: textproto.MIMEHeader{
-									"Content-Disposition": []string{"filename=\"test_file_2.txt\""},
-									"Content-Type":        []string{"text/html"},
-								},
-								content: []byte{1, 2, 3, 4, 5, 6, 7, 8},
-								tmpfile: "",
-								lastArg: "",
-							},
+					File: map[string][]*mltpart.FileHeader{
+						"ap": []*mltpart.FileHeader{
+							mltpart.NewFileHeader("test_file.txt1", textproto.MIMEHeader{
+								"Content-Disposition": []string{"filename=\"test_file_1.txt\""},
+								"Content-Type":        []string{"text/html"},
+							}, []byte{1, 2, 3, 4, 5, 6, 7, 8}),
+							mltpart.NewFileHeader("test_file.txt2", textproto.MIMEHeader{
+								"Content-Disposition": []string{"filename=\"test_file_2.txt\""},
+								"Content-Type":        []string{"text/html"},
+							}, []byte{1, 2, 3, 4, 5, 6, 7, 8}),
+							//							&mltpart.FileHeader{
+							//								Filename: "test_file.txt1",
+							//								Header: textproto.MIMEHeader{
+							//									"Content-Disposition": []string{"filename=\"test_file_1.txt\""},
+							//									"Content-Type":        []string{"text/html"},
+							//								},
+							//								//content: []byte{1, 2, 3, 4, 5, 6, 7, 8},
+							//								//tmpfile: "",
+							//								LastArg: "",
+							//							},
+							//							&mltpart.FileHeader{
+							//								Filename: "test_file.txt1",
+							//								Header: textproto.MIMEHeader{
+							//									"Content-Disposition": []string{"filename=\"test_file_2.txt\""},
+							//									"Content-Type":        []string{"text/html"},
+							//								},
+							//								//content: []byte{1, 2, 3, 4, 5, 6, 7, 8},
+							//								//tmpfile: "",
+							//								LastArg: "",
+							//							},
 						}},
 				},
 				result: "test_file_1.txttest_file_2.txt",
@@ -371,9 +386,9 @@ func TestTaskerRun(t *testing.T) {
 				procName:    "test_run_64k",
 				paramType:   "owa.vc_arr",
 				paramValues: []string{strings.Repeat("!", 30000), strings.Repeat("2", 30000), strings.Repeat("@", 30000)},
-				reqFiles: &Form{
+				reqFiles: &mltpart.Form{
 					Value: map[string][]string{},
-					File:  map[string][]*FileHeader{},
+					File:  map[string][]*mltpart.FileHeader{},
 				},
 				result: strings.Repeat("!", 30000) + strings.Repeat("2", 30000) + strings.Repeat("@", 30000),
 			},

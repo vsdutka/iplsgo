@@ -3,10 +3,11 @@ package otasker
 
 import (
 	"flag"
-	"gopkg.in/goracle.v1/oracle"
 	"sync"
 	"testing"
 	"time"
+
+	"gopkg.in/goracle.v1/oracle"
 )
 
 var (
@@ -40,12 +41,12 @@ func getConnection(t *testing.T) (conn *oracle.Connection) {
 func TestDescribe(t *testing.T) {
 	conn := getConnection(t)
 	defer conn.Close()
-	if err := Describe(conn, dsn_sid, "f"); err != nil {
+	if err := Describe(conn, dsn_sid, "htp.p"); err != nil {
 		t.Log(err)
 		t.Fail()
 	}
 
-	if _, _, err := ProcedureInfo(dsn_sid, "f"); err != nil {
+	if _, _, err := ProcedureInfo(dsn_sid, "htp.p"); err != nil {
 		t.Log(err)
 		t.Fail()
 	}
@@ -118,7 +119,7 @@ func TestDescribeAfterRecompile(t *testing.T) {
 		t.Fail()
 	}
 	if timestamp1 == timestamp2 {
-		t.Fatalf("got %s,\nwant %s", timestamp2.Format(time.RFC3339Nano), timestamp1.Format(time.RFC3339Nano))
+		t.Fatalf("got %s,\nwant %s, distance - %v", timestamp2.Format(time.RFC3339Nano), timestamp1.Format(time.RFC3339Nano), timestamp1.Sub(timestamp2))
 	}
 }
 
@@ -138,8 +139,8 @@ func TestDescribeAfterRecompile(t *testing.T) {
 func TestDescribe1(t *testing.T) {
 	conn := getConnection(t)
 	defer conn.Close()
-	for i := 0; i < 1000; i++ {
-		if err := Describe(conn, dsn_sid, "f"); err != nil {
+	for i := 0; i < 10; i++ {
+		if err := Describe(conn, dsn_sid, "htp.p"); err != nil {
 			t.Log(err)
 			t.Fail()
 		}
@@ -237,7 +238,7 @@ create or replace procedure test_descr
     ,ap12 in owa.vc_arr
     ,ap13 in owa.nc_arr
     ,ap14 in da_agt.d%type
-    ,ap15 in apex_040200.vc4000array
+    ,ap15 in apex_050100.wwv_flow_t_varchar2
   ) 
 is 
 begin 
