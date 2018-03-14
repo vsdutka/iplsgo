@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -18,7 +17,6 @@ const (
 	termMsgJust    = 40
 )
 
-// Format  is the interface implemented by StreamHandler formatters.
 type Format interface {
 	Format(r *Record) []byte
 }
@@ -110,9 +108,7 @@ func logfmt(buf *bytes.Buffer, ctx []interface{}, color int) {
 		if color > 0 {
 			fmt.Fprintf(buf, "\x1b[%dm%s\x1b[0m=%s", color, k, v)
 		} else {
-			buf.WriteString(k)
-			buf.WriteByte('=')
-			buf.WriteString(v)
+			fmt.Fprintf(buf, "%s=%s", k, v)
 		}
 	}
 
@@ -140,7 +136,7 @@ func JsonFormatEx(pretty, lineSeparated bool) Format {
 		props := make(map[string]interface{})
 
 		props[r.KeyNames.Time] = r.Time
-		props[r.KeyNames.Lvl] = r.Lvl.String()
+		props[r.KeyNames.Lvl] = r.Lvl
 		props[r.KeyNames.Msg] = r.Msg
 
 		for i := 0; i < len(r.Ctx); i += 2 {
@@ -148,7 +144,7 @@ func JsonFormatEx(pretty, lineSeparated bool) Format {
 			if !ok {
 				props[errorKey] = fmt.Sprintf("%+v is not a string key", r.Ctx[i])
 			}
-			props[k] = formatJSONValue(r.Ctx[i+1])
+			props[k] = formatJsonValue(r.Ctx[i+1])
 		}
 
 		b, err := jsonMarshal(props)
@@ -193,7 +189,7 @@ func formatShared(value interface{}) (result interface{}) {
 	}
 }
 
-func formatJSONValue(value interface{}) interface{} {
+func formatJsonValue(value interface{}) interface{} {
 	value = formatShared(value)
 	switch value.(type) {
 	case int, int8, int16, int32, int64, float32, float64, uint, uint8, uint16, uint32, uint64, string:
@@ -209,12 +205,6 @@ func formatLogfmtValue(value interface{}) string {
 		return "nil"
 	}
 
-	if t, ok := value.(time.Time); ok {
-		// Performance optimization: No need for escaping since the provided
-		// timeFormat doesn't have any escape characters, and escaping is
-		// expensive.
-		return t.Format(timeFormat)
-	}
 	value = formatShared(value)
 	switch v := value.(type) {
 	case bool:
@@ -232,49 +222,36 @@ func formatLogfmtValue(value interface{}) string {
 	}
 }
 
-var stringBufPool = sync.Pool{
-	New: func() interface{} { return new(bytes.Buffer) },
-}
-
 func escapeString(s string) string {
-	needsQuotes := false
-	needsEscape := false
-	for _, r := range s {
-		if r <= ' ' || r == '=' || r == '"' {
-			needsQuotes = true
-		}
-		if r == '\\' || r == '"' || r == '\n' || r == '\r' || r == '\t' {
-			needsEscape = true
-		}
-	}
-	if needsEscape == false && needsQuotes == false {
-		return s
-	}
-	e := stringBufPool.Get().(*bytes.Buffer)
+	needQuotes := false
+	e := bytes.Buffer{}
 	e.WriteByte('"')
 	for _, r := range s {
+		if r <= ' ' || r == '=' || r == '"' {
+			needQuotes = true
+		}
+
 		switch r {
 		case '\\', '"':
 			e.WriteByte('\\')
 			e.WriteByte(byte(r))
 		case '\n':
-			e.WriteString("\\n")
+			e.WriteByte('\\')
+			e.WriteByte('n')
 		case '\r':
-			e.WriteString("\\r")
+			e.WriteByte('\\')
+			e.WriteByte('r')
 		case '\t':
-			e.WriteString("\\t")
+			e.WriteByte('\\')
+			e.WriteByte('t')
 		default:
 			e.WriteRune(r)
 		}
 	}
 	e.WriteByte('"')
-	var ret string
-	if needsQuotes {
-		ret = e.String()
-	} else {
-		ret = string(e.Bytes()[1 : e.Len()-1])
+	start, stop := 0, e.Len()
+	if !needQuotes {
+		start, stop = 1, stop-1
 	}
-	e.Reset()
-	stringBufPool.Put(e)
-	return ret
+	return string(e.Bytes()[start:stop])
 }

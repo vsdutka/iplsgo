@@ -1,6 +1,7 @@
 package log15
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -8,11 +9,11 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/go-stack/stack"
+	"gopkg.in/inconshreveable/log15.v2/stack"
 )
 
-// Handler interface defines where and how log records are written.
-// A logger prints its log records by writing to a Handler.
+// A Logger prints its log records by writing to a Handler.
+// The Handler interface defines where and how log records are written.
 // Handlers are composable, providing you great flexibility in combining
 // them to achieve the logging structure that suits your applications.
 type Handler interface {
@@ -97,7 +98,8 @@ func (h *closingHandler) Close() error {
 // the calling function to the context with key "caller".
 func CallerFileHandler(h Handler) Handler {
 	return FuncHandler(func(r *Record) error {
-		r.Ctx = append(r.Ctx, "caller", fmt.Sprint(r.Call))
+		call := stack.Call(r.CallPC[0])
+		r.Ctx = append(r.Ctx, "caller", fmt.Sprint(call))
 		return h.Log(r)
 	})
 }
@@ -106,7 +108,8 @@ func CallerFileHandler(h Handler) Handler {
 // the context with key "fn".
 func CallerFuncHandler(h Handler) Handler {
 	return FuncHandler(func(r *Record) error {
-		r.Ctx = append(r.Ctx, "fn", fmt.Sprintf("%+n", r.Call))
+		call := stack.Call(r.CallPC[0])
+		r.Ctx = append(r.Ctx, "fn", fmt.Sprintf("%+n", call))
 		return h.Log(r)
 	})
 }
@@ -115,12 +118,23 @@ func CallerFuncHandler(h Handler) Handler {
 // with key "stack". The stack trace is formated as a space separated list of
 // call sites inside matching []'s. The most recent call site is listed first.
 // Each call site is formatted according to format. See the documentation of
-// package github.com/go-stack/stack for the list of supported formats.
+// log15/stack.Call.Format for the list of supported formats.
 func CallerStackHandler(format string, h Handler) Handler {
 	return FuncHandler(func(r *Record) error {
-		s := stack.Trace().TrimBelow(r.Call).TrimRuntime()
+		s := stack.Callers().
+			TrimBelow(stack.Call(r.CallPC[0])).
+			TrimRuntime()
 		if len(s) > 0 {
-			r.Ctx = append(r.Ctx, "stack", fmt.Sprintf(format, s))
+			buf := &bytes.Buffer{}
+			buf.WriteByte('[')
+			for i, pc := range s {
+				if i > 0 {
+					buf.WriteByte(' ')
+				}
+				fmt.Fprintf(buf, format, pc)
+			}
+			buf.WriteByte(']')
+			r.Ctx = append(r.Ctx, "stack", buf.String())
 		}
 		return h.Log(r)
 	})
@@ -180,7 +194,7 @@ func MatchFilterHandler(key string, value interface{}, h Handler) Handler {
 // level to the wrapped Handler. For example, to only
 // log Error/Crit records:
 //
-//     log.LvlFilterHandler(log.LvlError, log.StdoutHandler)
+//     log.LvlFilterHandler(log.Error, log.StdoutHandler)
 //
 func LvlFilterHandler(maxLvl Lvl, h Handler) Handler {
 	return FilterHandler(func(r *Record) (pass bool) {
@@ -188,7 +202,7 @@ func LvlFilterHandler(maxLvl Lvl, h Handler) Handler {
 	}, h)
 }
 
-// MultiHandler dispatches any write to each of its handlers.
+// A MultiHandler dispatches any write to each of its handlers.
 // This is useful for writing different types of log information
 // to different locations. For example, to log to a file and
 // standard error:
@@ -207,7 +221,7 @@ func MultiHandler(hs ...Handler) Handler {
 	})
 }
 
-// FailoverHandler writes all log records to the first handler
+// A FailoverHandler writes all log records to the first handler
 // specified, but will failover and write to the second handler if
 // the first handler has failed, and so on for all handlers specified.
 // For example you might want to log to a network socket, but failover
@@ -229,9 +243,11 @@ func FailoverHandler(hs ...Handler) Handler {
 			err = h.Log(r)
 			if err == nil {
 				return nil
+			} else {
+				r.Ctx = append(r.Ctx, fmt.Sprintf("failover_err_%d", i), err)
 			}
-			r.Ctx = append(r.Ctx, fmt.Sprintf("failover_err_%d", i), err)
 		}
+
 		return err
 	})
 }
@@ -278,8 +294,9 @@ func LazyHandler(h Handler) Handler {
 					hadErr = true
 					r.Ctx[i] = err
 				} else {
-					if cs, ok := v.(stack.CallStack); ok {
-						v = cs.TrimBelow(r.Call).TrimRuntime()
+					if cs, ok := v.(stack.Trace); ok {
+						v = cs.TrimBelow(stack.Call(r.CallPC[0])).
+							TrimRuntime()
 					}
 					r.Ctx[i] = v
 				}
@@ -313,12 +330,13 @@ func evaluateLazy(lz Lazy) (interface{}, error) {
 	results := value.Call([]reflect.Value{})
 	if len(results) == 1 {
 		return results[0].Interface(), nil
+	} else {
+		values := make([]interface{}, len(results))
+		for i, v := range results {
+			values[i] = v.Interface()
+		}
+		return values, nil
 	}
-	values := make([]interface{}, len(results))
-	for i, v := range results {
-		values[i] = v.Interface()
-	}
-	return values, nil
 }
 
 // DiscardHandler reports success for all writes but does nothing.
@@ -330,7 +348,7 @@ func DiscardHandler() Handler {
 	})
 }
 
-// Must object provides the following Handler creation functions
+// The Must object provides the following Handler creation functions
 // which instead of returning an error parameter only return a Handler
 // and panic on failure: FileHandler, NetHandler, SyslogHandler, SyslogNetHandler
 var Must muster

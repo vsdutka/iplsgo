@@ -1,26 +1,26 @@
-// +build !go1.4
+// +build appengine
 
 package log15
 
-import (
-	"sync/atomic"
-	"unsafe"
-)
+import "sync"
 
 // swapHandler wraps another handler that may be swapped out
 // dynamically at runtime in a thread-safe fashion.
 type swapHandler struct {
-	handler unsafe.Pointer
+	handler interface{}
+	lock    sync.RWMutex
 }
 
 func (h *swapHandler) Log(r *Record) error {
-	return h.Get().Log(r)
-}
+	h.lock.RLock()
+	defer h.lock.RUnlock()
 
-func (h *swapHandler) Get() Handler {
-	return *(*Handler)(atomic.LoadPointer(&h.handler))
+	return h.handler.(Handler).Log(r)
 }
 
 func (h *swapHandler) Swap(newHandler Handler) {
-	atomic.StorePointer(&h.handler, unsafe.Pointer(&newHandler))
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.handler = newHandler
 }
