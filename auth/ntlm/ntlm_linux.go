@@ -2,16 +2,7 @@
 package ntlm
 
 import (
-	"encoding/base64"
-	"errors"
-	"runtime"
-	"sync"
-	"syscall"
-	"time"
-
-	"github.com/alexbrainman/sspi"
-	ntlm_b "github.com/alexbrainman/sspi/ntlm"
-	"github.com/vsdutka/metrics"
+	"fmt"
 )
 
 type AuthContext interface {
@@ -28,35 +19,9 @@ func Context() AuthContext {
 	return &ctx
 }
 
-var ctxCounter = metrics.NewInt("ntlm_contexts", "NTLM - Number of contexts", "", "")
-
 var (
-	ctx = contexts{
-		contexts:    make(map[string]*context),
-		serverCreds: nil,
-	}
-
-	ctxFree = sync.Pool{
-		New: func() interface{} {
-			return new(context)
-		},
-	}
+	ctx = contexts{}
 )
-
-func init() {
-	go func() {
-		for {
-			select {
-			case <-time.After(time.Second * 1):
-				{
-					ctx.cleanup()
-				}
-			}
-		}
-	}()
-}
-
-type context struct {}
 
 type contexts struct {}
 
