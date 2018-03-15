@@ -1,10 +1,8 @@
-prefix=$ORACLE_HOME
-
-version=12.1
+version=12.2
 build=client64
 
-libdir=${prefix}/lib
-includedir=${prefix}
+libdir=$ORACLE_HOME/lib
+includedir=$ORACLE/include/oracle/$ORACLE_INSTANTCLIENT_MAJOR/client64
 
 glib_genmarshal=glib-genmarshal
 gobject_query=gobject-query
