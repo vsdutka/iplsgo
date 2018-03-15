@@ -52,3 +52,8 @@ log/iPLSGo_10111/ops.json
 *.html
 *.cmd
 _Vendor/*.*
+assets/*.*
+assets/
+tnsadmin/*.*
+*.save
+*.save.*
