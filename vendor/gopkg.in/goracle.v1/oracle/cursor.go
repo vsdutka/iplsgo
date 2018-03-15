@@ -17,8 +17,6 @@ limitations under the License.
 package oracle
 
 /*
-#cgo LDFLAGS: -loci
-
 #include <stdlib.h>
 #include <oci.h>
 

@@ -18,8 +18,6 @@ package oracle
 
 /*
 
-#cgo LDFLAGS: -loci
-
 //#include <stdio.h>
 #include <oci.h>
 #include <ociap.h>

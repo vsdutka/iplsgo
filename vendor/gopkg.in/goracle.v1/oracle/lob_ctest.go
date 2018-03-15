@@ -84,8 +84,6 @@ package oracle
 
 /*
 
-#cgo LDFLAGS: -loci
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
