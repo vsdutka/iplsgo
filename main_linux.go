@@ -4,7 +4,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"runtime"
@@ -32,7 +31,7 @@ func logInfof(format string, a ...interface{}) error {
 	// if logger != nil {
 	// 	return logger.Infof(format, a...)
 	// }
-	log.Printf(format, a...)
+	fmt.Printf(format, a...)
 	return nil
 }
 func logError(v ...interface{}) error {
@@ -41,7 +40,7 @@ func logError(v ...interface{}) error {
 	// if logger != nil {
 	// 	return logger.Error(v)
 	// }
-	log.Println(v...)
+	fmt.Println(v...)
 	return nil
 }
 
@@ -58,8 +57,8 @@ func main() {
 	flag.Parse()
 
 	if *verFlag == true {
-		log.Println("Version: ", VERSION)
-		log.Println("Build:   ", BUILD_DATE)
+		fmt.Println("Version: ", VERSION)
+		fmt.Println("Build:   ", BUILD_DATE)
 		os.Exit(0)
 	}
 
@@ -70,7 +69,7 @@ func main() {
 
 	err := startReading(*dsnFlag, *confNameFlag, (time.Duration)(*confReadTimeoutFlag)*time.Second)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	done := make(chan bool)

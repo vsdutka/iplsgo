@@ -45,17 +45,10 @@ RUN export -p
 RUN cd $GOPATH/src/github.com/vsdutka/iplsgo
 RUN go install github.com/vsdutka/iplsgo
 
-#RUN ln -sf /var/run/log /var/run/syslog
-
-RUN apt-get update -q \
-    && apt-get install rsyslog -y
-
 # Run the outyet command by default when the container starts.
 #ENTRYPOINT /go/bin/iplsgo "-dsn=iplsql_reader/1@(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))" "-conf=SE_unionASR.xcfg" "-conf_tm=1000000" "-host=DP-ASW3"
 
-CMD service rsyslog start \
-    && /go/bin/iplsgo "-dsn=iplsql_reader/1@(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))" "-conf=SE_unionASR.xcfg" "-conf_tm=1000000" "-host=DP-ASW3" \
-    && tailf /var/log/messages
+CMD /go/bin/iplsgo "-dsn=iplsql_reader/1@(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))" "-conf=SE_unionASR.xcfg" "-conf_tm=1000000" "-host=DP-ASW3"
 
 # Document that the service listens on port 8080.
 #EXPOSE 11119
