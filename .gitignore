@@ -1,4 +1,5 @@
 iplsgo.exe
+iplsgo
 *.log
 # Windows image file caches
 Thumbs.db
@@ -54,6 +55,7 @@ log/iPLSGo_10111/ops.json
 _Vendor/*.*
 assets/*.*
 assets/
+log/
 tnsadmin/*.*
 *.save
 *.save.*

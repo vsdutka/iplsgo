@@ -1,0 +1,7 @@
+FROM alpine
+EXPOSE 1717
+
+COPY iplsgo /bin/iplsgo
+
+USER nobody
+CMD iplsgo

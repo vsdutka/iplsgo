@@ -2,17 +2,13 @@
 # and a workspace (GOPATH) configured at /go.
 FROM golang:1.5.3
 
-# Copy the local package files to the container's workspace.
-#ADD . $GOPATH/src/github.com/vsdutka/iplsgo
+RUN go version && go env
 
-#RUN ls $GOPATH/src/github.com/vsdutka/iplsgo/
-#RUN ls $GOPATH/src/github.com/vsdutka/iplsgo/tnsadmin
-
-RUN ls $GOPATH
 RUN mkdir -p $GOPATH/src/github.com/vsdutka \
-    cd $GOPATH/src/github.com/vsdutka \
-    git clone https://github.com/vsdutka/iplsgo.git \
-    cd iplsgo
+    && cd $GOPATH/src/github.com/vsdutka \
+    && git clone https://github.com/vsdutka/iplsgo.git \
+    && cd iplsgo \
+    && ls -F
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -41,17 +37,27 @@ RUN apt-get update && apt-get install -y libaio1 \
 
 ENV GO15VENDOREXPERIMENT=1 
 
-RUN cp -a $GOPATH/src/github.com/vsdutka/iplsgo/tnsadmin/*.*  $ORACLE_HOME/
+# RUN cp -a $GOPATH/src/github.com/vsdutka/iplsgo/tnsadmin/*.*  $ORACLE_HOME/
 # Build the outyet command inside the container.
 # (You may fetch or manage dependencies here,
 # either manually or with a tool like "godep".)
-#RUN go install github.com/vsdutka/iplsgo
+RUN export -p
+RUN cd $GOPATH/src/github.com/vsdutka/iplsgo
+RUN go install github.com/vsdutka/iplsgo
 
 #RUN ln -sf /var/run/log /var/run/syslog
 
+RUN apt-get update -q \
+    && apt-get install rsyslog -y
+
 # Run the outyet command by default when the container starts.
-#ENTRYPOINT /go/bin/iplsgo "-dsn=iplsql_reader/1@dp-se-tst1" "-conf=SE_unionASR.xcfg" "-conf_tm=1000000" "-host=DP-ASW3"
+#ENTRYPOINT /go/bin/iplsgo "-dsn=iplsql_reader/1@(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))" "-conf=SE_unionASR.xcfg" "-conf_tm=1000000" "-host=DP-ASW3"
+
+CMD service rsyslog start \
+    && /go/bin/iplsgo "-dsn=iplsql_reader/1@(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))" "-conf=SE_unionASR.xcfg" "-conf_tm=1000000" "-host=DP-ASW3" \
+    && tailf /var/log/messages
 
 # Document that the service listens on port 8080.
 #EXPOSE 11119
-COPY / Dockerfile.run
+#COPY / Dockerfile.run
+#CMD tar -cf -C / Dockerfile.run -C $GOPATH/bin iplsgo

@@ -35,7 +35,7 @@ var logChan = make(chan string, 10000)
 
 func init() {
 	go func() {
-		const fmtFileName = "${log_dir}\\ex${date}.log"
+		const fmtFileName = "${log_dir}/ex${date}.log"
 		var (
 			lastLogging = time.Time{}
 			logFile     *os.File
