@@ -22,6 +22,7 @@ var (
 	verFlag             *bool
 	svcFlag             *string
 	dsnFlag             *string
+	hostFlag            *string
 	confNameFlag        *string
 	confReadTimeoutFlag *int
 )
@@ -95,6 +96,7 @@ func main() {
 	verFlag = flag.Bool("version", false, "Show version")
 	svcFlag = flag.String("service", "", fmt.Sprintf("Control the system service. Valid actions: %q\n", service.ControlAction))
 	dsnFlag = flag.String("dsn", "", "    Oracle DSN (user/passw@sid)")
+	hostFlag = flag.String("host", "", "   Host name")
 	confNameFlag = flag.String("conf", "", "   Configuration name")
 	confReadTimeoutFlag = flag.Int("conf_tm", 10, "Configuration read timeout in seconds")
 	flag.Parse()
@@ -119,7 +121,11 @@ func main() {
 		Name:        confServiceName,
 		DisplayName: confServiceDispName,
 		Description: confServiceDispName,
-		Arguments:   []string{fmt.Sprintf("-dsn=%s", *dsnFlag), fmt.Sprintf("-conf=%s", *confNameFlag), fmt.Sprintf("-conf_tm=%v", *confReadTimeoutFlag)},
+		Arguments: []string{fmt.Sprintf("-dsn=%s", *dsnFlag),
+			fmt.Sprintf("-conf=%s", *confNameFlag),
+			fmt.Sprintf("-conf_tm=%v", *confReadTimeoutFlag),
+			fmt.Sprintf("-host=%v", *hostFlag),
+		},
 	}
 
 	prg := &program{}

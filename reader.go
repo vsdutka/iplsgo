@@ -8,7 +8,7 @@ import (
 
 	"github.com/vsdutka/iplsgo/otasker"
 	"github.com/vsdutka/metrics"
-	"gopkg.in/errgo.v1"
+	errgo "gopkg.in/errgo.v1"
 	"gopkg.in/goracle.v1/oracle"
 )
 
@@ -31,8 +31,11 @@ func initReading(dsn, configName string) error {
 	reader_username, reader_password, reader_sid = oracle.SplitDSN(dsn)
 	configname = configName
 	var err error
-	if hostname, err = os.Hostname(); err != nil {
-		return errgo.Newf("Error getting host name: %s\n", err)
+	hostname = *hostFlag
+	if hostname == "" {
+		if hostname, err = os.Hostname(); err != nil {
+			return errgo.Newf("Error getting host name: %s\n", err)
+		}
 	}
 	return nil
 }
