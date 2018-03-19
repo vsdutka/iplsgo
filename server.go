@@ -401,7 +401,7 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 				return
 			}
 		}
-		dumpFileName := expandFileName(fmt.Sprintf("${log_dir}\\err_%s_${datetime}.log", userName))
+		dumpFileName := expandFileName(fmt.Sprintf("${log_dir}/err_%s_${datetime}.log", userName))
 
 		var isSpecial bool
 		isSpecial, connStr := func(user string) (bool, string) {
