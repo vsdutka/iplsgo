@@ -45,7 +45,16 @@ ENV GO15VENDOREXPERIMENT=1
 RUN cd $GOPATH/src/github.com/vsdutka/iplsgo
 RUN go install github.com/vsdutka/iplsgo
 
-EXPOSE 33777
-EXPOSE 33778
+RUN apt-get update && apt-get install -y unzip \
+    && mkdir TMP_DIR="$(mktemp -d)" && cd "$TMP_DIR" \
+    && curl -O https://cr-as-stend-3:11119/software/mastercopy.zip
+    && mkdir -p $HOME/wwwroot
+    && unzip mastercopy.zip -d $HOME/wwwroot
+    && rm -rf $TMP_DIR/*.*
+    && rm -rf /var/lib/apt/lists/* && apt-get purge -y --auto-remove curl unzip
 
-ENTRYPOINT ["/go/bin/iplsgo", "-dsn=iplsql_reader/1@(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))", "-conf=DOCKED_ASR", "-conf_tm=1000000", "-host=DP-ASW3"]
+
+EXPOSE 10111
+EXPOSE 8882
+
+ENTRYPOINT ["/go/bin/iplsgo", "-dsn=iplsql_reader/1@(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))", "-conf=DOCKER_10111.xcfg", "-conf_tm=10000", "-host=DP-ASW3", "-cs=(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))"]

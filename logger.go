@@ -69,6 +69,7 @@ func init() {
 					if _, err := logFile.WriteString(str); err != nil {
 						logError(err)
 					}
+					fmp.Println(str)
 				}
 			}
 		}
