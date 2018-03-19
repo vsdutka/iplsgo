@@ -2,6 +2,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -69,7 +70,7 @@ func init() {
 					if _, err := logFile.WriteString(str); err != nil {
 						logError(err)
 					}
-					fmp.Println(str)
+					fmt.Println(str)
 				}
 			}
 		}
