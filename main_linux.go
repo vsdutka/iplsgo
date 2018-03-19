@@ -17,12 +17,7 @@ import (
 
 //ВАЖНО - собирать с GODEBUG=cgocheck=0
 var (
-	verFlag             *bool
-	dsnFlag             *string
-	hostFlag            *string
-	confNameFlag        *string
-	confReadTimeoutFlag *int
-	healthy             int32
+	healthy int32
 )
 
 func logInfof(format string, a ...interface{}) error {
@@ -48,12 +43,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	oracle.IsDebug = false
 
-	flag.Usage = usage
-	verFlag = flag.Bool("version", false, "Show version")
-	dsnFlag = flag.String("dsn", "", "    Oracle DSN (user/passw@sid)")
-	hostFlag = flag.String("host", "", "   Host name")
-	confNameFlag = flag.String("conf", "", "   Configuration name")
-	confReadTimeoutFlag = flag.Int("conf_tm", 10, "Configuration read timeout in seconds")
+	setupFlags()
 	flag.Parse()
 
 	if *verFlag == true {
@@ -103,16 +93,4 @@ func main() {
 	<-done
 	logInfof("Server stopped\n")
 
-}
-
-const usageTemplate = `iplsgo is OWA/APEX listener
-
-Usage: iplsgo commands
-
-The commands are:
-`
-
-func usage() {
-	fmt.Fprintln(os.Stderr, usageTemplate)
-	flag.PrintDefaults()
 }

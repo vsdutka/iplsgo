@@ -404,20 +404,25 @@ func newOwa(pathStr string, typeTasker int, sessionIdleTimeout, sessionWaitTimeo
 		dumpFileName := expandFileName(fmt.Sprintf("${log_dir}/err_%s_${datetime}.log", userName))
 
 		var isSpecial bool
-		isSpecial, connStr := func(user string) (bool, string) {
-			if user == "" {
-				return false, ""
-			}
-			isSpecial, grpID, ok := getUserInfo(user)
-			if !ok {
-				return false, ""
-			}
-			sid := ""
-			if sid, ok = grps[grpID]; !ok {
-				return false, ""
-			}
-			return isSpecial, sid
-		}(userName)
+		isSpecial, connStr := getConnectionParams(userName, grps)
+		//		isSpecial, connStr := func(user string) (bool, string) {
+		//			if user == "" {
+		//				return false, ""
+		//			}
+		//			isSpecial, grpID, ok := getUserInfo(user)
+		//			if !ok {
+		//				return false, ""
+		//			}
+		//			// Получаем глобальную строку соединения для ВСЕХ пользователей
+		//			sid := *conectionString
+		//			// если она пустая, ищем среди данных конфигурации
+		//			if sid == "" {
+		//				if sid, ok = grps[grpID]; !ok {
+		//					return false, ""
+		//				}
+		//			}
+		//			return isSpecial, sid
+		//		}(userName)
 		if connStr == "" {
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s%s\"", r.Host, requestUserRealm))
 			w.WriteHeader(http.StatusUnauthorized)
