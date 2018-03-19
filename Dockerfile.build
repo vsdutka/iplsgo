@@ -41,16 +41,11 @@ ENV GO15VENDOREXPERIMENT=1
 # Build the outyet command inside the container.
 # (You may fetch or manage dependencies here,
 # either manually or with a tool like "godep".)
-RUN export -p
+# RUN export -p
 RUN cd $GOPATH/src/github.com/vsdutka/iplsgo
 RUN go install github.com/vsdutka/iplsgo
 
-# Run the outyet command by default when the container starts.
-#ENTRYPOINT /go/bin/iplsgo "-dsn=iplsql_reader/1@(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))" "-conf=SE_unionASR.xcfg" "-conf_tm=1000000" "-host=DP-ASW3"
+EXPOSE 33777
+EXPOSE 33778
 
-CMD /go/bin/iplsgo "-dsn=iplsql_reader/1@(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))" "-conf=SE_unionASR.xcfg" "-conf_tm=1000000" "-host=DP-ASW3"
-
-# Document that the service listens on port 8080.
-#EXPOSE 11119
-#COPY / Dockerfile.run
-#CMD tar -cf -C / Dockerfile.run -C $GOPATH/bin iplsgo
+ENTRYPOINT ["/go/bin/iplsgo", "-dsn=iplsql_reader/1@(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))", "-conf=DOCKED_ASR", "-conf_tm=1000000", "-host=DP-ASW3"]
