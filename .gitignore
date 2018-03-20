@@ -57,5 +57,6 @@ assets/*.*
 assets/
 log/
 tnsadmin/*.*
+WWWROOT/
 *.save
 *.save.*

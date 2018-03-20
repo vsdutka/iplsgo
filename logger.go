@@ -70,7 +70,7 @@ func init() {
 					if _, err := logFile.WriteString(str); err != nil {
 						logError(err)
 					}
-					fmt.Println(str)
+					fmt.Print(str)
 				}
 			}
 		}
