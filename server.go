@@ -175,7 +175,7 @@ func serveHTTP(w http.ResponseWriter, r *http.Request) {
 		url = url + "?" + params
 	}
 
-	writeToLog(fmt.Sprintf("%s, %s, %s, %s, %12d, %12d, %8d, %d, %s, %s, %v\r\n",
+	writeToLog(fmt.Sprintf("%s, %20s, %s, %s, %12d, %12d, %8d, %d, %s, %s, %v\r\n",
 		r.RemoteAddr,
 		user,
 		end.Format("2006.01.02"),
