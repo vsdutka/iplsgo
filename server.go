@@ -21,6 +21,7 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/kardianos/osext"
+	errgo "gopkg.in/errgo.v1"
 
 	"github.com/vsdutka/iplsgo/otasker"
 	"github.com/vsdutka/metrics"
