@@ -1,19 +1,17 @@
-FROM alpine
+FROM oracle-instantclient-12-1
 
 
-ENV ORACLE_INSTANTCLIENT_MAJOR 12.1
-ENV ORACLE_INSTANTCLIENT_VERSION 12.1.0.2.0
-ENV ORACLE /usr/local/oracle
-ENV ORACLE_HOME $ORACLE/lib/oracle/$ORACLE_INSTANTCLIENT_MAJOR/client64
+#ENV ORACLE_INSTANTCLIENT_MAJOR 12.1
+#ENV ORACLE_INSTANTCLIENT_VERSION 12.1.0.2.0
+#ENV ORACLE /usr/local/oracle
+#ENV ORACLE_HOME $ORACLE/lib/oracle/$ORACLE_INSTANTCLIENT_MAJOR/client64
 
+RUN mkdir -p /go/bin
+COPY iplsgo /go/bin/iplsgo
 
-ADD . tmp
-RUN ls -F tmp
-
-RUN mkdir -p /go/bin/log \
-    && cp tmp/iplsgo go/bin/ \
-    && mkdir -p $ORACLE/lib \
-    && cp -a tmp/lib/* $ORACLE/lib 
+#RUN usermod -u 1000 /root/log
+#RUN usermod -G staff /root/log
 
 USER nobody
+
 ENTRYPOINT ["/go/bin/iplsgo"]
