@@ -1,7 +1,19 @@
 FROM alpine
-EXPOSE 1717
 
-COPY iplsgo /bin/iplsgo
+
+ENV ORACLE_INSTANTCLIENT_MAJOR 12.1
+ENV ORACLE_INSTANTCLIENT_VERSION 12.1.0.2.0
+ENV ORACLE /usr/local/oracle
+ENV ORACLE_HOME $ORACLE/lib/oracle/$ORACLE_INSTANTCLIENT_MAJOR/client64
+
+
+ADD . tmp
+RUN ls -F tmp
+
+RUN mkdir -p /go/bin/log \
+    && cp tmp/iplsgo go/bin/ \
+    && mkdir -p $ORACLE/lib \
+    && cp -a tmp/lib/* $ORACLE/lib 
 
 USER nobody
-CMD iplsgo
+ENTRYPOINT ["/go/bin/iplsgo"]
