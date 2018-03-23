@@ -1,17 +1,33 @@
 FROM oracle-instantclient-12-1
 
 
-#ENV ORACLE_INSTANTCLIENT_MAJOR 12.1
-#ENV ORACLE_INSTANTCLIENT_VERSION 12.1.0.2.0
-#ENV ORACLE /usr/local/oracle
-#ENV ORACLE_HOME $ORACLE/lib/oracle/$ORACLE_INSTANTCLIENT_MAJOR/client64
+ENV SRC_URL ""
+ENV TST_NUM ""
 
-RUN mkdir -p /go/bin
-COPY iplsgo /go/bin/iplsgo
+ENV DSN "" 
+ENV CONF "" 
+ENV CONF_TM "" 
+ENV HOST "" 
+ENV CS "" 
 
-#RUN usermod -u 1000 /root/log
-#RUN usermod -G staff /root/log
 
-USER nobody
+VOLUME /ext/tst$TST_NUM
+VOLUME /wwwroot
+VOLUME /apex5
+VOLUME /log
 
-ENTRYPOINT ["/go/bin/iplsgo"]
+RUN mkdir -p /bin
+COPY iplsgo /bin/iplsgo
+
+CMD rm -f -R /ext/tst$TST_NUM/* \
+    && rm -f -R /log/* \
+    && cd /ext/tst$TST_NUM \
+    && wget --no-check-certificate $SRC_URL \
+    && unzip -q -L *.zip -d ./ \
+    && rm *.zip \
+    && echo $DSN \
+    && echo $CONF \
+    && echo $CONF_TM \
+    && /bin/iplsgo "$DSN" "$CONF" "$CONF_TM" "$HOST" "$CS" 
+    
+#USER nobody

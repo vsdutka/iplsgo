@@ -54,10 +54,3 @@ RUN apt-get update && apt-get install -y libaio1 \
 #RUN cd /go/bin/
 #RUN ls -F ./
 CMD cd /result/ && tar -C ./ -cf - . 
-
-
-#CMD ls $HOME/wwwroot && /go/bin/iplsgo
-
-#ENTRYPOINT ["/go/bin/iplsgo"]
-
-#, "-dsn=iplsql_reader/1@(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))", "-conf=DOCKER_10111.xcfg", "-conf_tm=10000", "-host=DP-ASW3", "-cs=(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))"

@@ -19,8 +19,9 @@ ENV GO15VENDOREXPERIMENT=1
 
 COPY /Dockerfile.run $GOPATH/bin/Dockerfile.run
 
-RUN apt-get update && apt-get install -y unzip \
-    && mkdir -p $GOPATH/src/github.com/vsdutka/iplsgo \
+RUN #apt-get update && apt-get install -y unzip \
+    #&& 
+    mkdir -p $GOPATH/src/github.com/vsdutka/iplsgo \
     && cd $GOPATH/src/github.com/vsdutka \
     && wget --no-check-certificate -O master.zip "https://github.com/vsdutka/iplsgo/archive/master.zip" \ 
     && unzip master.zip \
@@ -29,7 +30,7 @@ RUN apt-get update && apt-get install -y unzip \
     && ls -F \
     && cd $GOPATH/src/github.com/vsdutka/iplsgo \
     && go install github.com/vsdutka/iplsgo \
-    && rm -rf /var/lib/apt/lists/* && apt-get purge -y --auto-remove unzip \
+    #&& rm -rf /var/lib/apt/lists/* && apt-get purge -y --auto-remove unzip \
     && mkdir /go/bin/log \
     && mkdir -p /result/lib \
     && cp /go/bin/Dockerfile.run /result \

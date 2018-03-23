@@ -35,23 +35,8 @@ RUN apt-get update && apt-get install -y libaio1 \
     && rm -rf /var/lib/apt/lists/* \
     && cd $GOPATH/src/github.com/vsdutka/iplsgo \
     && go install github.com/vsdutka/iplsgo \
-    #&& cd "$TMP_DIR" \
-    #&& wget --no-check-certificate -v -O mastercopy.zip https://dp-asw3:11119/software/mastercopy.zip \
-    #&& mkdir -p $HOME/wwwroot \
-    #&& unzip -q mastercopy.zip \
-    #&& cp -r mastercopy/* $HOME/wwwroot/ \
-    #&& ls -F $HOME/wwwroot/ \
-    #&& chown nobody:nogroup $HOME/wwwroot/ROLF \
-    #$$ echo "/home           192.168.0.0(rw,sync,no_root_squash,no_subtree_check)" >> /etc/exports \
-    #&& echo "$HOME/wwwroot/rolf        192.168.0.0(rw,sync,no_subtree_check)" >> /etc/exports \
-    #&& exportfs -a \
-    #&& rm -rf "$TMP_DIR" \
     && rm -rf /var/lib/apt/lists/* && apt-get purge -y --auto-remove curl rpm2cpio cpio unzip \
     && mkdir /go/bin/log
 
 
-#CMD ls $HOME/wwwroot && /go/bin/iplsgo
-
 ENTRYPOINT ["/go/bin/iplsgo"]
-
-#, "-dsn=iplsql_reader/1@(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))", "-conf=DOCKER_10111.xcfg", "-conf_tm=10000", "-host=DP-ASW3", "-cs=(DESCRIPTION=(ADDRESS = (PROTOCOL = TCP)(HOST = DP-AS-N3)(PORT = 1521))(CONNECT_DATA =(SERVICE_NAME = TST14)))"

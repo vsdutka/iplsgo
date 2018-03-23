@@ -60,3 +60,4 @@ tnsadmin/*.*
 WWWROOT/
 *.save
 *.save.*
+*.sh

@@ -3,7 +3,10 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/vsdutka/iplsgo/otasker"
@@ -14,7 +17,10 @@ import (
 
 var (
 	configReadDuration = metrics.NewFloat("config_read_duration", "Config - Read duration", "Seconds", "s")
+	readerLog          *log.Logger
 )
+
+const fmtReaderFileName = "./reader.log"
 
 var (
 	stopChan        = make(chan struct{})
@@ -37,6 +43,15 @@ func initReading(dsn, configName string) error {
 			return errgo.Newf("Error getting host name: %s\n", err)
 		}
 	}
+	//В этот момент нет конфигурации, поэтому создаем файл лога рядом с исполнимым файлом
+	dir, _ := filepath.Split(fmtReaderFileName)
+	os.MkdirAll(dir, os.ModeDir)
+	logFile, err := os.OpenFile(fmtReaderFileName, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Println("Error = ", err)
+		logError(err)
+	}
+	readerLog = log.New(logFile, "", log.LstdFlags|log.Lshortfile)
 	return nil
 }
 
@@ -93,11 +108,9 @@ func startReading(dsn, configName string, timeout time.Duration) error {
 					}()
 
 					if err != nil {
-						logInfof("Configuration was read in %6.4f seconds with error. Error: %s\n", time.Since(bg).Seconds(), err)
-						//confLogger.Printf("Configuration was read in %6.4f seconds with error. Error: %s\n", time.Since(bg).Seconds(), err)
+						readerLog.Printf("Service %s - Configuration was read in %6.4f seconds with error. Error: %s\n", confServiceName, time.Since(bg).Seconds(), err)
 					} else {
-						logInfof("Configuration was read in %6.4f seconds\n", time.Since(bg).Seconds())
-						//confLogger.Printf("Configuration was read in %6.4f seconds\n", time.Since(bg).Seconds())
+						readerLog.Printf("Service %s - Configuration was read in %6.4f seconds\n", confServiceName, time.Since(bg).Seconds())
 					}
 					configReadDuration.Set(time.Since(bg).Seconds())
 					// Инициируем следующий тик через timeout
@@ -168,35 +181,6 @@ func readConfig() ([]byte, error) {
 		return nil, errgo.Newf("Configuration \"%s\" does not exists", configname)
 	}
 	return buf, nil
-
-	//	row, err := cur.FetchOne()
-	//	if err != nil {
-	//		return nil, errgo.Newf("error executing `c.config`: %s", otasker.UnMask(err))
-	//	}
-	//	ext, ok := row[0].(*oracle.ExternalLobVar)
-	//	if !ok {
-	//		return nil, errgo.Newf("data is not *ExternalLobVar, but %T", row[0])
-	//	}
-	//	if ext != nil {
-	//		size, err := ext.Size(false)
-	//		if err != nil {
-	//			return nil, errgo.Newf("size error: ", err)
-	//		}
-	//		if size != 0 {
-	//			buf, err := ext.ReadAll()
-	//			if err != nil {
-	//				return nil, err
-	//			}
-	//			if bytes.Equal(buf, []byte("{}")) {
-	//				return nil, errgo.Newf("Configuration \"%s\" does not exists", configname)
-	//			}
-	//			return buf, nil
-	//		}
-	//		return nil, errgo.New("data size is 0")
-	//	}
-	//	return nil, errgo.New("data not available")
 }
 
 const stmReadConfig = `select * from table(c.config(:1, :2, ''))`
-
-//const stmReadConfig = `select c.config(:1, :2) from dual`
