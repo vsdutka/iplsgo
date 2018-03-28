@@ -62,3 +62,4 @@ WWWROOT/
 *.save.*
 *.sh
 run.sh
+.vs/
