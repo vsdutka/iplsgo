@@ -17,3 +17,10 @@ docker run --rm -p 221$2:25111 -p 222$2:25112 \
 -v $HOME/assets/trunk/wwwroot:/wwwroot \
 -v $HOME/assets/tst$2/rolf:/ext/tst$2 \
 --name=ipls_tst$2 iplsgo 
+
+
+#!/bin/bash
+# Delete all containers
+docker rm $(docker ps -a -q)
+# Delete all images
+docker rmi $(docker images -q)

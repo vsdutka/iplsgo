@@ -4,11 +4,6 @@ FROM go153-oracle-instantclient-12-1
 
 ENV DEBIAN_FRONTEND noninteractive
 
-#ENV ORACLE_INSTANTCLIENT_MAJOR 12.1
-#ENV ORACLE_INSTANTCLIENT_VERSION 12.1.0.2.0
-
-#ENV ORACLE /usr/local/oracle
-#ENV ORACLE_HOME $ORACLE/lib/oracle/$ORACLE_INSTANTCLIENT_MAJOR/client64
 ENV LD_LIBRARY_PATH $ORACLE_HOME/lib
 ENV C_INCLUDE_PATH $ORACLE/include/oracle/$ORACLE_INSTANTCLIENT_MAJOR/client64
 ENV CGO_CFLAGS -I$C_INCLUDE_PATH
@@ -19,22 +14,17 @@ ENV GO15VENDOREXPERIMENT=1
 
 COPY /Dockerfile.run $GOPATH/bin/Dockerfile.run
 
-RUN #apt-get update && apt-get install -y unzip \
-    #&& 
-    mkdir -p $GOPATH/src/github.com/vsdutka/iplsgo \
+RUN mkdir -p $GOPATH/src/github.com/vsdutka/iplsgo \
     && cd $GOPATH/src/github.com/vsdutka \
-    && wget --no-check-certificate -O master.zip "https://github.com/vsdutka/iplsgo/archive/master.zip" \ 
-    && unzip master.zip \
+    && curl -L --output $GOPATH/src/github.com/vsdutka/master.zip "https://github.com/vsdutka/iplsgo/archive/master.zip" \ 
+    && ls -F $GOPATH/src/github.com/vsdutka/ \
+    && unzip $GOPATH/src/github.com/vsdutka/master.zip \
     && mv iplsgo-master/* iplsgo \
     && cd iplsgo \
     && ls -F \
     && cd $GOPATH/src/github.com/vsdutka/iplsgo \
-    && go install github.com/vsdutka/iplsgo \
-    #&& rm -rf /var/lib/apt/lists/* && apt-get purge -y --auto-remove unzip \
-    && mkdir /go/bin/log \
-    && mkdir -p /result/lib \
-    && cp /go/bin/Dockerfile.run /result \
-    && cp /go/bin/iplsgo /result 
+    && go install github.com/vsdutka/iplsgo 
 
 
-CMD cd /result/ && tar -C ./ -cf - . 
+
+CMD cd /go/bin && tar -C ./ -cf - . 

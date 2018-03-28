@@ -2,32 +2,34 @@ FROM oracle-instantclient-12-1
 
 
 ENV SRC_URL ""
-ENV TST_NUM ""
 
 ENV DSN "" 
 ENV CONF "" 
 ENV CONF_TM "" 
 ENV HOST "" 
 ENV CS "" 
+ENV EXT_DIR ""
 
-
-VOLUME /ext/tst$TST_NUM
-VOLUME /wwwroot
-VOLUME /apex5
-VOLUME /log
+#VOLUME $EXT_DIR
+#VOLUME /wwwroot
+#VOLUME /apex5
+#VOLUME /log
 
 RUN mkdir -p /bin
 COPY iplsgo /bin/iplsgo
 
-CMD rm -f -R /ext/tst$TST_NUM/* \
-    && rm -f -R /log/* \
-    && cd /ext/tst$TST_NUM \
-    && wget --no-check-certificate $SRC_URL \
-    && unzip -q -L *.zip -d ./ \
+CMD cd $EXT_DIR \
+    && rm -f -R * \
+    && ls -F $EXT_DIR \
+    && rm -f -R /log/* \   
+    && curl --output $EXT_DIR/zip.zip $SRC_URL \
+    && unzip -q -L *.zip -d $EXT_DIR \
     && rm *.zip \
     && echo $DSN \
     && echo $CONF \
     && echo $CONF_TM \
+    && echo $HOST \
+    && echo $CS \
     && /bin/iplsgo "$DSN" "$CONF" "$CONF_TM" "$HOST" "$CS" 
     
 #USER nobody
