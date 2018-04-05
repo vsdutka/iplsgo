@@ -23,8 +23,9 @@ CMD cd $EXT_DIR \
     && ls -F $EXT_DIR \
     && rm -f -R /log/* \   
     && curl --output $EXT_DIR/zip.zip $SRC_URL \
+    && cat $EXT_DIR/zip.zip \
     && unzip -q -L *.zip -d $EXT_DIR \
-    && rm *.zip \
+#    && rm *.zip \
     && echo $DSN \
     && echo $CONF \
     && echo $CONF_TM \
