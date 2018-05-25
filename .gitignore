@@ -63,3 +63,4 @@ WWWROOT/
 *.sh
 run.sh
 .vs/
+.vs/*.*
