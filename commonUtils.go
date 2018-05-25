@@ -26,6 +26,11 @@ func makeHandlerID(isSpecial bool, userName, userPass, debugIP string, req *http
 	if debugIP == "uuid" {
 		host = uuid.New()
 	}
+	if isSpecial {
+		if debugIP == "" {
+			debugIP = req.Header.Get("X-Request-Id")
+		}
+	}
 	return strings.ToUpper(userName + "|" + userPass + "|" + host + "|" + debugIP)
 }
 

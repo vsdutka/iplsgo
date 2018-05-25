@@ -208,7 +208,7 @@ func (r *oracleTasker) Run(sessionID, taskID, userName, userPass, connStr,
 	if err := r.connect(userName, userPass, connStr); err != nil {
 		res.StatusCode, res.Content /*needDisconnect*/, _ = packError(err)
 		// Формируем дамп до закрытия соединения, чтобы получить корректный запрос из последнего шага
-		r.dumpError(userName, connStr, dumpErrorFileName, err)
+		r.dumpError(userName, connStr, dumpErrorFileName, cgiEnv["HTTP_REFERER"], err)
 
 		//Если произошла ошибка, всегда закрываем соединение с БД
 		r.disconnect()
@@ -226,7 +226,7 @@ func (r *oracleTasker) Run(sessionID, taskID, userName, userPass, connStr,
 		cgiEnv, procName, urlParams, reqFiles); err != nil {
 		res.StatusCode, res.Content /*needDisconnect*/, _ = packError(err)
 		// Формируем дамп до закрытия соединения, чтобы получить корректный запрос из последнего шага
-		r.dumpError(userName, connStr, dumpErrorFileName, err)
+		r.dumpError(userName, connStr, dumpErrorFileName, cgiEnv["HTTP_REFERER"], err)
 
 		//Если произошла ошибка, всегда закрываем соединение с БД
 		r.disconnect()
@@ -1161,7 +1161,7 @@ func killSession(stm, username, password, sid, sessionID string) error {
 	return nil
 }
 
-func (r *oracleTasker) dumpError(userName, connStr, dumpErrorFileName string, err error) {
+func (r *oracleTasker) dumpError(userName, connStr, dumpErrorFileName, referer string, err error) {
 	stm, stmShow := r.lastStms()
 	var buf bytes.Buffer
 	// BOM
@@ -1169,6 +1169,7 @@ func (r *oracleTasker) dumpError(userName, connStr, dumpErrorFileName string, er
 	buf.WriteString(fmt.Sprintf("Имя пользователя : %s\r\n", userName))
 	buf.WriteString(fmt.Sprintf("Строка соединения : %s\r\n", connStr))
 	buf.WriteString(fmt.Sprintf("Дата и время возникновения : %s\r\n", time.Now().Format(time.RFC1123Z)))
+	buf.WriteString(fmt.Sprintf("Referer : %s\r\n", referer))
 	buf.WriteString("******* Текст SQL  ********************************\r\n")
 	buf.WriteString(strings.Replace(stm, "\n", "\r\n", -1) + "\r\n")
 	buf.WriteString("******* Текст SQL закончен ************************\r\n")
