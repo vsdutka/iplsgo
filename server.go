@@ -58,10 +58,14 @@ func startServer() {
 	go func() {
 		if confHTTPDebugPort != 0 {
 			logInfof("Debug listener starting on port \"%d\"\n", confHTTPDebugPort)
+			http.HandleFunc("/debug/conf/server", confServer)
+			http.HandleFunc("/debug/conf/users", confUsers)
 			debugHTTP := &http.Server{Addr: fmt.Sprintf(":%d", confHTTPDebugPort),
 				ReadTimeout:  time.Duration(confHTTPReadTimeout) * time.Millisecond,
 				WriteTimeout: time.Duration(confHTTPReadTimeout) * time.Millisecond,
-				Handler:      http.DefaultServeMux,
+				Handler: &loggedHandler{func() http.Handler {
+					return http.DefaultServeMux
+				}},
 			}
 			if err := debugHTTP.ListenAndServe(); err != nil {
 				logError(err)
@@ -74,6 +78,8 @@ func startServer() {
 		logInfof("Main listener starting on port \"%d\"\n", confHTTPPort)
 	}
 	go func() {
+		//		handler := http.NewServeMux()
+		//		handler.HandleFunc("/", serveHTTP)
 		serverHTTP := &http.Server{Addr: fmt.Sprintf(":%d", confHTTPPort),
 			ReadTimeout:  time.Duration(confHTTPReadTimeout) * time.Millisecond,
 			WriteTimeout: time.Duration(confHTTPWriteTimeout) * time.Millisecond,
@@ -86,7 +92,13 @@ func startServer() {
 					connCounter.Add(-1)
 				}
 			},
-			Handler: http.DefaultServeMux}
+			//Handler: handler,
+			Handler: &loggedHandler{func() http.Handler {
+				confLock.RLock()
+				defer confLock.RUnlock()
+				return router
+			}},
+		}
 
 		if confHTTPSsl {
 			err := func() error {
@@ -135,7 +147,6 @@ func stopServer() {
 }
 
 func init() {
-	http.HandleFunc("/", serveHTTP)
 	exeName, err := osext.Executable()
 
 	if err == nil {
@@ -292,38 +303,38 @@ func parseConfig(buf []byte) error {
 
 			}
 		}
-		newRouter.GET("/debug/conf/server", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-			c := serverConfigHolder{
-				ServiceName:      confServiceName,
-				ServiceDispName:  confServiceDispName,
-				HTTPPort:         confHTTPPort,
-				HTTPDebugPort:    confHTTPDebugPort,
-				HTTPReadTimeout:  confHTTPReadTimeout,
-				HTTPWriteTimeout: confHTTPWriteTimeout,
-				HTTPSsl:          confHTTPSsl,
-				HTTPSslCert:      confHTTPSslCert,
-				HTTPSslKey:       confHTTPSslKey,
-				HTTPLogDir:       confHTTPLogDir,
-			}
-			buf, err := json.Marshal(c)
-			if err != nil {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(err.Error()))
-				return
-			}
-			w.WriteHeader(http.StatusOK)
-			w.Write(buf)
-		})
-		newRouter.GET("/debug/conf/users", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-			buf, err := getUsers()
-			if err != nil {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(err.Error()))
-				return
-			}
-			w.WriteHeader(http.StatusOK)
-			w.Write(buf)
-		})
+		//		newRouter.GET("/debug/conf/server", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		//			c := serverConfigHolder{
+		//				ServiceName:      confServiceName,
+		//				ServiceDispName:  confServiceDispName,
+		//				HTTPPort:         confHTTPPort,
+		//				HTTPDebugPort:    confHTTPDebugPort,
+		//				HTTPReadTimeout:  confHTTPReadTimeout,
+		//				HTTPWriteTimeout: confHTTPWriteTimeout,
+		//				HTTPSsl:          confHTTPSsl,
+		//				HTTPSslCert:      confHTTPSslCert,
+		//				HTTPSslKey:       confHTTPSslKey,
+		//				HTTPLogDir:       confHTTPLogDir,
+		//			}
+		//			buf, err := json.Marshal(c)
+		//			if err != nil {
+		//				w.WriteHeader(http.StatusOK)
+		//				w.Write([]byte(err.Error()))
+		//				return
+		//			}
+		//			w.WriteHeader(http.StatusOK)
+		//			w.Write(buf)
+		//		})
+		//		newRouter.GET("/debug/conf/users", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		//			buf, err := getUsers()
+		//			if err != nil {
+		//				w.WriteHeader(http.StatusOK)
+		//				w.Write([]byte(err.Error()))
+		//				return
+		//			}
+		//			w.WriteHeader(http.StatusOK)
+		//			w.Write(buf)
+		//		})
 		// Начинаем изменять параметры
 		confLock.Lock()
 		defer confLock.Unlock()
@@ -350,6 +361,39 @@ func parseConfig(buf []byte) error {
 		copy(prevConf, buf)
 	}()
 	return nil
+}
+
+func confServer(w http.ResponseWriter, r *http.Request) {
+	c := serverConfigHolder{
+		ServiceName:      confServiceName,
+		ServiceDispName:  confServiceDispName,
+		HTTPPort:         confHTTPPort,
+		HTTPDebugPort:    confHTTPDebugPort,
+		HTTPReadTimeout:  confHTTPReadTimeout,
+		HTTPWriteTimeout: confHTTPWriteTimeout,
+		HTTPSsl:          confHTTPSsl,
+		HTTPSslCert:      confHTTPSslCert,
+		HTTPSslKey:       confHTTPSslKey,
+		HTTPLogDir:       confHTTPLogDir,
+	}
+	buf, err := json.Marshal(c)
+	if err != nil {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(buf)
+}
+func confUsers(w http.ResponseWriter, r *http.Request) {
+	buf, err := getUsers()
+	if err != nil {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(buf)
 }
 
 func newRedirect(redirectPath string) func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {

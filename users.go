@@ -37,6 +37,10 @@ func getConnectionParams(user string, grps map[int32]string) (bool, string) {
 		if sid, ok = grps[grpID]; !ok {
 			return false, ""
 		}
+	} else {
+		if _, ok = grps[grpID]; !ok {
+			return false, ""
+		}
 	}
 	return isSpecial, sid
 }

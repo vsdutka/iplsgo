@@ -64,3 +64,6 @@ WWWROOT/
 run.sh
 .vs/
 .vs/*.*
+lfw/
+pool/
+.vs/

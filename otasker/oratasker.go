@@ -1055,6 +1055,9 @@ func (r *oracleTasker) saveFileToDB(paramStoreProc, beforeScript, afterScript, d
 	}
 
 	r.setStepInfo(stepSaveFileToDBNum, stepStm, stepStm, true)
+	if ret == nil {
+		return "", nil
+	}
 	return ret.(string), nil
 }
 

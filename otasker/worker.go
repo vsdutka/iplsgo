@@ -121,7 +121,7 @@ func (w *worker) listen(path, ID string, idleTimeout time.Duration) {
 				}
 
 			}
-		case /*<-timer.C: //*/ <-time.After(idleTimeout):
+		case /*<-timer.C*/ <-time.After(idleTimeout):
 			{
 				return
 			}
@@ -227,7 +227,7 @@ func Run(
 				w.inChan <- wrk
 
 			}
-		case /*<-timer.C: //*/ <-time.After(waitTimeout):
+		case /*<-timer.C*/ <-time.After(waitTimeout):
 			{
 				/* Сигнализируем о том, что идет выполнение другог запроса и нужно предложить прервать */
 				return OracleTaskResult{StatusCode: StatusBreakPage, Duration: w.worked()}
@@ -244,7 +244,7 @@ func Run(
 			delete(w.outChanList, taskID)
 			w.Unlock()
 			return res
-		case /*<-timer.C: //*/ <-time.After(waitTimeout):
+		case /*<-timer.C*/ <-time.After(waitTimeout):
 			{
 				/* Сигнализируем о том, что идет выполнение этого запроса и нужно показать червяка */
 				return OracleTaskResult{StatusCode: StatusWaitPage, Duration: w.worked()}

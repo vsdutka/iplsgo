@@ -2,10 +2,14 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/vsdutka/metrics"
@@ -17,6 +21,14 @@ type statusWriter struct {
 	http.ResponseWriter
 	status int
 	length int
+}
+
+func (w *statusWriter) Hijack() (rwc net.Conn, buf *bufio.ReadWriter, err error) {
+	hj, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("Writer doesn't support hijacking")
+	}
+	return hj.Hijack()
 }
 
 func (w *statusWriter) WriteHeader(status int) {
@@ -78,4 +90,50 @@ func init() {
 }
 func writeToLog(msg string) {
 	logChan <- msg
+}
+
+type loggedHandler struct {
+	handlerFunc func() http.Handler
+}
+
+func (l *loggedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r.URL.Path = strings.ToLower(r.URL.Path)
+
+	countOfRequests.Add(1)
+	defer countOfRequests.Add(-1)
+
+	start := time.Now()
+	writer := statusWriter{w, 0, 0}
+	handler := l.handlerFunc()
+	handler.ServeHTTP(&writer, r)
+	end := time.Now()
+	latency := end.Sub(start)
+	statusCode := writer.status
+	length := writer.length
+	user, _, ok := r.BasicAuth()
+	if !ok {
+		user = "-"
+	}
+	url := r.URL.Path
+
+	params := r.Form.Encode()
+	if params != "" {
+		url = url + "?" + params
+	}
+
+	writeToLog(fmt.Sprintf("%s, %20s, %s, %s, %12d, %12d, %8d, %d, %s, %s, %v\r\n",
+		r.RemoteAddr,
+		user,
+		end.Format("2006.01.02"),
+		end.Format("15:04:05.000000000"),
+		//r.Proto,
+		//r.Host,
+		length,
+		r.ContentLength,
+		time.Since(start)/time.Millisecond,
+		statusCode,
+		r.Method,
+		url,
+		latency,
+	))
 }

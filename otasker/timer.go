@@ -2,6 +2,7 @@
 package otasker
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -27,6 +28,9 @@ func acquireTimer(timeout time.Duration) *time.Timer {
 	numberOfAcquiringOfTimer.Add(1)
 
 	t := tv.(*time.Timer)
+	if !t.Stop() {
+		fmt.Println("Timer not stopped")
+	}
 	if t.Reset(timeout) {
 		panic("BUG: Active timer trapped into acquireTimer()")
 	}
